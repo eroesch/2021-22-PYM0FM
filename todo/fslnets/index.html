@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+
+<!-- Start of Practical boilerplate. -->
+<link rel="stylesheet" type="text/css" href="../../../fsl/fsl.css" />
+<link rel="stylesheet" type="text/css" href="../../../fsl/quiz.css">
+<link rel="stylesheet" type="text/css" href="../../../fsl/viz.css">
+
+<script type="text/javascript" src="../../../fsl/quiz.js"></script>
+<script type="text/javascript" src="../../../fsl/showhide.js"></script>
+<script type="text/javascript" src="../../../fsl/viz.js"></script>
+<script type="text/javascript">
+window.onload=function() {
+    setupQuizQuestions();
+    var graphs = document.querySelectorAll(".viz-graph");
+    var parser = new DOMParser;
+    for (var i = 0; i < graphs.length; i++){
+        var div = graphs[i];
+        var dom = parser.parseFromString(div.innerHTML, "text/html");
+        div.innerHTML = Viz(dom.body.textContent);
+        var svg = div.querySelector("svg");
+        svg.setAttribute("width",  "100%");
+    }
+}
+</script>
+<!-- End of Practical boilerplate. -->
+
+
+<title>Resting state FSLnets practical</title>
+</head>
+
+
+<body>
+<div id="practical">
+<h1 class="centred">Resting state FSLnets practical</h1>
+
+<p><b>FSLNets</b> is a toolbox for carrying out basic network modelling from FMRI timeseries data.
+  It is a collection of MATLAB or Octave scripts that run a connectivity analysis
+  between sets of timeseries. </p>
+
+<p>Estimating network matrices and performing statistical analyses on these requires
+the following steps:</p>
+<ol>
+  <li>Extracting subject-specific timeseries relating to a given set of spatial maps of nodes.
+    For example, using dual regression stage 1
+    outputs</li>
+
+  <li>Looking for group-level noise components that you want to remove</li>
+
+  <li>Calculating correlations (full or partial) between all pairs of timeseries
+    to build the network matrix (netmat) for each subject</li>
+
+  <li>Looking at the group-average network matrix and how nodes cluster together
+    into a hierarchy</li>
+
+  <li>Performing group-level statistical analysis</li>
+</ol>
+
+<h2>Contents:</h2>
+<dl class="contents">
+  <dt><a href="#before">Before running FSLnets</a></dt>
+  <dd>Defining nodes and edges to run network modelling analysis</dd>
+
+  <dt><a href="#networks_estimation">Networks estimation</a></dt>
+  <dd>Estimating network matrices from dual regression outputs</dd>
+
+  <dt><a href="#group_average">Group-average netmat summaries</a></dt>
+  <dd>Calculating group-average netmats</dd>
+
+  <dt> <a href="#subject_comparison">Cross-subject comparison with
+  netmats</a></dt>
+  <dd>Comparing individual edge strengths between subject groups</dd>
+
+  <dt> <a href="#multivariate_analysis"> (Optional) Multivariate cross-subject analysis</a></dt>
+  <dd>Multivariate comparison of whole netmats across subject groups</dd>
+
+
+</dl>
+
+<p>In the next sections we will go through an example of how perform network modelling using
+  resting-state data (i.e. the output from melodic followed by stage 1 of dual regression). However, with FSLNets you can
+  analyse any set of timeseries!</p>
+
+<hr/>
+<h2><a name="before"></a>Before running FSLnets</a></h2>
+
+<p> Before you run FSLnets, you need to prepare several things:</p>
+<ul>
+<li> <b>Define 'nodes'</b></li>
+<p> The nodes are the spatial maps that define the regions included in our network modelling.
+  Nodes can be defined in a number of ways, but for this practical we have already generated the nodes for you
+  using the following group ICA command to extract 100 components (please do not run this again): </p>
+
+<pre class="dontrun">
+melodic -i input_files.txt -o groupICA100 \
+  --tr=0.72 --nobet -a concat \
+  --bgimage=$FSLDIR/data/standard/MNI152_T1_2mm_brain.nii.gz \
+  -m $FSLDIR/data/standard/MNI152_T1_2mm_brain_mask.nii.gz \
+  --report --Oall -d 100
+</pre>
+
+<div class="aside">
+Nodes could also be defined using anatomical or functional atlases, although anatomical atlases may not provide good functional parcellations as the structural boundaries are not always a good estimate of functional boundaries.</a>
+</div>
+
+<li> <b>Extract timeseries from nodes </b></li>
+<p>To look at the temporal relationship between our nodes, we must first extract the timeseries from each node.
+  Again, the timeseries extraction can be done in a number of ways. For this practical, we have already extracted
+  the timeseries from the 100 nodes by running dual regression with the command below, and using the stage 1 output. </p>
+
+  <pre class="dontrun">
+dual_regression groupICA100/melodic_IC 1 -1 0 groupICA100.dr `cat input_files.txt`
+  </pre>
+
+<li><b> Create images of nodes </b></li>
+<p> For visualisation purposes, FSLnets requires a PNG image of each node.
+  We have created these for you (located in <code>~/fsl_course_data/rest/Nets/group100.sum</code>) using the following command: </p>
+
+<pre class="dontrun">slices_summary groupICA100/melodic_IC 4 $FSLDIR/data/standard/MNI152_T1_2mm groupICA100.sum -1</pre>
+
+<p>This command takes the 4D image containing the group ICA components (<code>groupICA100/melodic_IC</code>),
+  sets a minimum threshold of 4, specifies the MNI152_T1_2mm as the background image,
+  and creates the output directory group100.sum, which contains the png images of each node.
+  The -1 flag specifies that single-slice summaries should be generated instead of 3-slice summaries. </p>
+
+</ul>
+
+<hr/>
+<h2><a name="configuration">Octave configuration</a></h2>
+
+<p>To start this FSLNets network modelling practical, open a terminal and cd
+to the working directory of this practical, then start Octave:</p>
+
+
+<pre class="bash">
+cd ~/fsl_course_data/rest/Nets
+octave
+</pre>
+
+<p>Add the folder containing the scripts we are going to use to the path, and
+setup a few variables:</p>
+
+
+<pre class="matlab">
+addpath ~/fsl_course_data/rest/FSLNets
+addpath(sprintf('%s/etc/matlab',getenv('FSLDIR')))
+addpath ~/fsl_course_data/rest/octave/libsvm/matlab
+pkg load statistics
+</pre>
+
+
+<hr/>
+<h2><a name="networks_estimation">Networks estimation</a></h2>
+
+
+<p>Now we are ready to start setting up some important parts for our network
+modelling analysis. To load in all subjects' timeseries data files from the
+dual-regression output directory, run:</p>
+
+
+<pre class="matlab">
+ts = nets_load('groupICA100.dr', 0.72, 0);
+</pre>
+
+
+<p>Type <code>fieldnames(ts)</code> and hit enter to have a look at the contents of the structure that was created using this command.
+  <code>ts.ts</code> contains the stage 1 dual regression timeseries from all subjects.
+  Try to figure out what information the other variables in the structure <code>ts</code> contain.</p>
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR;
+  node [shape=box];
+  1 [label="dual regression output folder
+('groupICA100.dr')"];
+  2 [label="repetition time (TR)
+(0.72)"];
+  3 [label="normalisation of timeseries
+(0) here none"];
+  4 [label="nets_load"];
+  5 [label="output structure with subfields
+(ts)"];
+  1 -> 4;
+  2 -> 4;
+  3 -> 4;
+  4 -> 5;
+}
+</div>
+
+
+<p>We will now have a quick look at the temporal spectra of the resting state networks (RSNs), as a
+quick check that these look reasonable. Running the following command will
+open a figure in which the left part of the plot shows one spectrum per
+group-ICA component, each averaged across all subjects. The right part shows
+the same thing, but with all spectra overlapping. </p>
+
+
+<pre class="matlab">
+ts_spectra = nets_spectra(ts);
+</pre>
+
+</p>
+<span class="clickme" onclick="showIt('spectra_figure_explanation')">Click here for more information on how to read the figure</span>
+</p>
+
+<div id="spectra_figure_explanation" class="answer" style="display: none">
+<p>The spectra should fall off smoothly with increasing frequency.
+  The median spectrum is also shown with a thick black line
+  (and as a thin grey line under every plot on the left).</p>
+<p style="text-align:center;"><img src="spectra.png" alt="Figure 1" vspace="15" width="70%"></p>
+</div>
+
+<p> </p>
+
+<div class="quiz_question">
+  <span class="question">Why do the figures show that all nodes have high
+  power in the low-frequency range? </span><br/>
+  <form>
+    <input id="option1" class="option" type="radio"
+    name="answer"/><label>Because in this dataset the TR is very low</label>
+    <span id="option1" class="answer incorrect">Incorrect! While the TR does
+    relate to the maximum frequency that can be measured, it does not
+    determine where the power of the signal is.</span><br/>
+
+    <input id="option2" class="option" type="radio"
+    name="answer"/><label>Because bandpass filtering has been performed on
+    this data</label>
+    <span id="option2" class="answer incorrect">Incorrect!  These data have
+    only been highpass filtered to remove drift.</span><br/>
+
+   <input id="option3" class="option" type="radio"
+   name="answer"/><label>Because the hemodynamic response function is very
+   slow and therefore neural fluctuations are mainly seen as slow fluctuations
+   in the BOLD signal</label>
+   <span id="option3" class="answer correct">Correct! Neural responses are
+   measured indirectly in BOLD, and fluctuations are expected to vary slowly
+   as a result of the properties of the HRF.</span><br/>
+
+  </form>
+</div>
+
+<h3>Cleaning components </h3>
+<p>There is the option to remove components' (nodes') timeseries that
+correspond to artefacts rather than plausible nodes. Similarly to the last
+practical, you need to decide this by looking at the spatial maps,
+timeseries, and frequency spectra. To save time, we have listed the good
+components for you. Run the following commands to list the good components and
+apply the cleanup:</p>
+
+
+<pre class="matlab">
+ts.DD = [1:3,5,6:9,11:13,17:23,25:38,40,42,43,47:50,52,53,55:59,61,...
+62,64:66,70:74,77,80,81,86,87,93,97];
+ts = nets_tsclean(ts,1);
+</pre>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR;
+  node [shape=box];
+  1 [label="input structure
+(ts) loaded previously"];
+  2 [label="aggressive or soft cleanup
+(1) i.e. aggressive"];
+  3 [label="nets_tsclean"];
+  4 [label="output structure
+(ts) overwriting original ts"];
+  1 -> 3;
+  2 -> 3;
+  3 -> 4;
+}
+</div>
+
+<p> </p>
+
+<div class="quiz_question">
+  <span class="question">What is 'aggressive' cleanup </span><br/>
+  <form>
+    <input id="option1" class="option" type="radio"
+    name="answer"/><label>All node timeseries labelled as noise are regressed out of the signal node timeseries</label>
+    <span id="option1" class="answer correct">Correct! </span><br/>
+
+    <input id="option2" class="option" type="radio"
+    name="answer"/><label>All node timeseries labelled as noise are removed from ts.ts</label>
+    <span id="option2" class="answer incorrect">Incorrect! Simply removing timeseries is called soft cleanup. </span><br/>
+  </form>
+</div>
+
+
+<h3>Calculating netmats for each subject </h3>
+<p>Now you are ready to compute a network matrix for each subject, which is in
+general a matrix of correlation strengths (correlation coefficients). We will compute two different versions of these <em>netmats</em> for
+each subject: a simple full correlation (<code>'corr'</code>), and a partial correlation
+that has been <em>regularised</em> in order to potentially improve the
+mathematical robustness of the estimation (<code>'ridgep'</code>). The partial correlation
+matrix should do a better job of only estimating the direct network
+connections than the full correlation does.</p>
+
+
+<pre class="matlab">
+Fnetmats = nets_netmats(ts,1,'corr');
+Pnetmats = nets_netmats(ts,1,'ridgep',0.1);
+</pre>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR;
+  node [shape=box];
+  1 [label="inputs structure
+(ts)"];
+  2 [label="apply Fisher's r-to-z transformation?
+(1) i.e. yes"];
+  3 [label="method for netmat estimation
+('ridgep') i.e. regularised partial correlation"];
+  4 [label="regularisation parameter
+(0.1)"];
+  5 [label="nets_netmats"];
+  6 [label="output variable
+(Pnetmats)"];
+  1 -> 5;
+  2 -> 5;
+  3 -> 5;
+  4 -> 5;
+  5 -> 6;
+}
+</div>
+
+
+<p>The full and partial netmats are now calculated for all subjects.
+  Now run this command to look at the size of the <code>Fnetmats</code> variable:</p>
+
+<pre class="matlab">
+size(Fnetmats)
+</pre>
+
+<p> Can you figure out how the netmats of all subjects are saved in this? <span class="clickme" onclick="showIt('Fnetmats explanation')">Answer.</span></p>
+
+<div id="Fnetmats explanation" class="answer" style="display: none">
+The number of rows is equal to the number of subjects. Each node-by-node network matrix is reshaped into a single line (i.e. number of nodes * number of nodes).
+</div>
+
+<p>In the next section, you are going to compute the group average and take a look at the average network matrix.</p>
+
+<hr/>
+<h2><a name="group_average">Group-average netmat summaries</a></h2>
+
+<p>We have computed the full and partial network matrices for each individual subject.
+  The next step is to perform a simple group-level analysis
+  to look at the mean network matrix across all subjects.
+  This can be done using the command below, which saves out both the simple average of
+  netmats accross all subjects (<code>Mnet</code>) and the results of a simple one-group t-test (against zero) across subjects as Z values (<code>Znet</code>).</p>
+
+<div class="aside">
+To calculate the group average netmat, each individual's netmat is unwrapped into a row and combined to create a subjects * edges matrix.
+The average edge strength is then calcualted across subjects. </a>
+</div>
+
+<pre class="matlab">
+[Znet_F,Mnet_F]=nets_groupmean(Fnetmats,0);
+[Znet_P,Mnet_P]=nets_groupmean(Pnetmats,1);
+</pre>
+
+<p>The second input to this command indicates whether or not to display a summary figure.
+  This is set to 1 for the second command run on the partial netmats, so the summary figure for this will show up.
+  On the left, this figure shows the results from the group t-test, and on the right is a consistency scatter plot
+  showing how similar the results from each subject are to the group (i.e. the more this looks like a diagonal line,
+  the more consistent the relevant netmat is across subjects).</p>
+
+</p>
+<span class="clickme" onclick="showIt('group_figure_explanation')">Click here for more information on how to read the figure</span>
+</p>
+
+
+<div id="group_figure_explanation" class="answer" style="display: none">
+<p style="text-align:center;"><img src="group_average.png" alt="Figure 1" vspace="15" width="40%"></p>
+</div>
+
+<p> </p>
+
+<div class="quiz_question">
+
+  <span class="question">The value of <code>Mnet_P</code> in row 3, column 27
+  is ~6.6 (you can check this by typing <code>Mnet_P(3,27)</code> into Octave
+  and hitting enter). What does this number represent?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>The
+    mean full correlation strength between node number 3 and node number 27
+    (after performing r-to-Z transformation for each subject before
+    averaging)</label>
+    <span id="option1" class="answer incorrect">Incorrect!  Remember that we
+    are visualising the results for the partial netmats!</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>The
+    mean partial correlation strength between node number 3 and node number 27
+    (after performing r-to-Z transformation for each subject before
+    averaging)</label>
+    <span id="option2" class="answer correct">Correct! The group-averaged
+    strength of the partial correlation between the pair of nodes is shown
+    here (which is also called the 'edge' between the two nodes). The number
+    is higher than 1, because these are averaged z-transformed correlation
+    coefficients.</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>That
+    the connection is 6.59 times stronger in patients than in healthy
+    controls </label>
+    <span id="option3" class="answer incorrect">Incorrect! We have not yet
+    done a group comparison, this is just the average partial correlation
+    strength between the pair of nodes (which is called an
+    'edge').</span><br/>
+  </form>
+</div>
+
+<h3>Group average network hierarchy </h3>
+
+<p>The next thing we can look at is how nodes cluster together to form larger
+resting state networks. For this we run a clustering method that groups nodes
+together based on their covariance structure. To view this network hierarchy, run:</p>
+
+
+<pre class="matlab">
+nets_hierarchy(Znet_F,Znet_P,ts.DD,'groupICA100.sum');
+</pre>
+
+</p>
+<span class="clickme" onclick="showIt('hierarchy_figure_explanation')">Click here for more information on how to read the figure</span>
+</p>
+
+
+<div id="hierarchy_figure_explanation" class="answer" style="display: none">
+<p style="text-align:center;"><img src="hierarchy.png" alt="Figure 1" vspace="15" width="70%"></p>
+</div>
+
+<p> </p>
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="group-averaged netmat to drive clustering
+(Znet_F) shown below the diagonal"];
+  2 [label="group-average netmat to show (doesn't drive clustering)
+(Znet_P) shown above the diagonal"];
+  3 [label="list of good components
+(ts.DD) entered earlier"];
+  4 [label="directory containing png summary figures
+('groupICA100.sum') to create run:
+slices_summary groupICA100/melodic_IC 4 $FSLDIR/data/standard/MNI152_T1_2mm groupICA100.sum -1"];
+  5 [label="nets_hierarchy = the FSLnets command we are running"];
+  1 -> 5;
+  2 -> 5;
+  3 -> 5;
+  4 -> 5;
+}
+</div>
+
+
+<p>You can see, for example, that 8 nodes have been grouped together which
+form of a large-scale resting state network called the default mode network
+that you may have heard about.</p>
+
+
+<hr/>
+<h2><a name="subject_comparison">Cross-subject comparison with netmats</a></h2>
+
+
+<p>We are now able to test whether the netmats differ significantly between
+healthy controls and patients with a tumor using a two-sample t-test. This is
+a 'univariate' test, as we will test each network matrix edge separately for a
+group-difference, and then we will estimate p-values for these tests,
+correcting for multiple comparisons across all tests. By analogy to
+high-level task-fMRI analyses: you can think of each subject's netmat as being
+an NxN image of voxels, and the univariate testing as modelling each voxel (in
+isolation from each other) across subjects.</p>
+
+<p>We have already created the design files for you to run the two-sample t-test.
+If you want to look at the design, open the GLM GUI (in a new terminal window) and load the <code>~/fsl_course_data/rest/Nets/design/unpaired_ttest_1con.fsf</code> file
+(ignore the error message, go to the 'stats' tab and click 'full model setup' to be able to see the design).</p>
+
+To perform the comparison run the following command (which calls <code>randomise</code> from within Octave, with 5000
+permutations for each contrast):</p>
+
+<pre class="matlab">
+[p_uncorr,p_corr]=nets_glm(Pnetmats,'design/unpaired_ttest_1con.mat','design/unpaired_ttest_1con.con',1);
+</pre>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR;
+  node [shape=box];
+  1 [label="input to t-test
+(Pnetmats)"];
+  2 [label="EVs of group-level design
+('design/paired_ttest.mat')
+use GLM gui to create this"];
+  3 [label="contrasts of group-level design
+('design/paired_ttest.con')
+use GLM gui to create this"];
+  4 [label="create output figure?
+(1) i.e. yes"];
+  5 [label="nets_glm"];
+  6 [label="variable containing uncorrected p-values
+(p_uncorr)"];
+  7 [label="variable containing p-values corrected for multiple comparisons
+(p_corr)"]
+  1 -> 5;
+  2 -> 5;
+  3 -> 5;
+  4 -> 5;
+  5 -> 6;
+  5 -> 7;
+}
+</div>
+
+
+<p>Once randomise has finished, you will see a figure showing
+&quot;netmats&quot; containing corrected p-values. The results above the
+diagonal show edges where the two-group t-test is significant, at
+corrected-p&lt;0.05.</p>
+
+</p>
+<span class="clickme" onclick="showIt('glm_figure_explanation')">Click here for more information on how to read the figure</span>
+</p>
+
+
+<div id="glm_figure_explanation" class="answer" style="display: none">
+<p style="text-align:center;"><img src="glm.png" alt="Figure 1" vspace="15" width="35%"></p>
+</div>
+
+<h3> Displaying significant group differences</h3>
+
+<p>We will now run a command that shows which nodes were linked to the
+significant differences between the groups:</p>
+
+
+<pre class="matlab">
+nets_edgepics(ts,'groupICA100.sum',Znet_P,reshape(p_corr,ts.Nnodes,ts.Nnodes),1);
+</pre>
+
+</p>
+<span class="clickme" onclick="showIt('edge_figure_explanation')">Click here for more information on how to read the figure</span>
+</p>
+
+
+<div id="edge_figure_explanation" class="answer" style="display: none">
+<p style="text-align:center;"><img src="edge.png" alt="Figure 1" vspace="15" width="30%"></p>
+</div>
+
+<p>
+Each pair of thumbnails corresponds to one position in the NxN network matrix
+and the node numbers are listed in the text captions. The coloured bar joining
+each pair of nodes tells you what the overall group-average connection strength
+is: thicker means a stronger connection; red means it's positive, and blue means
+that the connection is "negative" (meaning that the two nodes tend to
+anti-correlate on average). The "value" numbers tell you the 1-p-values - so the
+higher these are, the more significantly different this edge strength is between
+the two groups. Anything less than 0.95 is not significant, after correcting for
+multiple comparisons.
+</p>
+
+<h3> Displaying boxplots </h3>
+
+<p>In addition, we also want to show how the partial correlation differs
+between the patients and the controls and these two significant edges. To do
+this, run:</p>
+
+
+<pre class="matlab">
+nets_boxplots(ts,Pnetmats,57,33,6);
+</pre>
+
+
+<p>The boxplots summarize the distributions of the correlation values
+(connection strengths) in the two groups - <b>A</b> being healthy controls
+and <b>B</b> being tumour patients - for this one particular node-pair
+(57,33).</p>
+
+</p>
+<span class="clickme" onclick="showIt('box_figure_explanation')">Click here for more information on how to read the figure</span>
+</p>
+
+
+<div id="box_figure_explanation" class="answer" style="display: none">
+<p style="text-align:center;"><img src="box.png" alt="Figure 1" vspace="15" width="20%"></p>
+</div>
+
+<p> </p>
+
+<div class="quiz_question">
+
+  <span class="question">Using this plot, how would you interpret what caused
+  the significant group difference for the edge between node 57 and
+  33?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>The
+    connection strength was positive in healthy controls and not present in
+    the patients </label>
+    <span id="option1" class="answer correct">Correct! For the patients the
+    results are not significantly different from zero.</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>The
+    connection was positive in both patients and controls, but higher in
+    patients</label>
+    <span id="option2" class="answer incorrect">Incorrect! The group-averaged
+    strength of the partial correlation was positive in healthy controls, and
+    close to zero in patients.</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>The
+    connection was negative in both patients and controls, but more negative
+    in patients</label>
+    <span id="option3" class="answer incorrect">Incorrect! The group-averaged
+    strength of the partial correlation was positive in healthy controls, and
+    close to zero in patients.</span><br/>
+  </form>
+</div>
+
+<p>Type <code>exit</code> in the terminal to exit Octave if you are finishing the practical here and not doing the optional section below.</p>
+
+<hr/>
+<h2><a name="multivariate_analysis">(Optional) Multivariate cross-subject analysis
+</a></h2>
+
+
+<p>Finally, we will now carry out multivariate cross-subject analysis -
+meaning that, instead of considering each netmat edge in isolation (like we
+did above) we will consider the whole netmat in one analysis.</p>
+
+
+<p>For example, we can attempt to classify subjects into patients or controls
+using machine learning methods, such as support vector machines (SVM) or
+linear discriminant analysis (LDA). Such methods look at the overall pattern
+of values in the netmat, and try to learn how the overall pattern changes
+between the two groups.</p>
+
+
+<p>The following command feeds the regularised partial correlation netmats
+from both groups into LDA. It uses a method known as leave-one-out
+cross-validation to train and test a classifier, and reports in what
+percentage of tests it was successful at discriminating between patients and
+controls:</p>
+
+
+<pre class="matlab">
+nets_lda(Pnetmats,6,2)
+</pre>
+
+
+<p>You can also try using other classifiers, for example by changing the last
+entry from 2 to 1 (type <code>help nets_lda</code> for further details).</p>
+
+
+<p>One &quot;downside&quot; of such multivariate testing is that you can no
+longer make strong statistical claims about individual edges in the network -
+the whole pattern of edges has been used, so we don't know which individual
+edges are significantly different in the two groups.</p>
+
+
+<p>Type <code>exit</code> in the terminal to exit Octave.</p>
+
+
+<hr/>
+<p class="centred">The End.</p>
+</div>
+</body>
+</html>

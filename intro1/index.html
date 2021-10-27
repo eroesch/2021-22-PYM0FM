@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+
+<!-- Start of Practical boilerplate. -->
+<link rel="stylesheet" type="text/css" href="../fsl/fsl.css" />
+<link rel="stylesheet" type="text/css" href="../fsl/quiz.css">
+<link rel="stylesheet" type="text/css" href="../fsl/viz.css">
+
+<script type="text/javascript" src="../../../fsl/quiz.js"></script>
+<script type="text/javascript" src="../../../fsl/showhide.js"></script>
+<script type="text/javascript" src="../../../fsl/viz.js"></script>
+<script type="text/javascript">
+window.onload=function() {
+    setupQuizQuestions();
+    var graphs = document.querySelectorAll(".viz-graph");
+    var parser = new DOMParser;
+    for (var i = 0; i < graphs.length; i++){
+        var div = graphs[i];
+        var dom = parser.parseFromString(div.innerHTML, "text/html");
+        div.innerHTML = Viz(dom.body.textContent);
+        var svg = div.querySelector("svg");
+        svg.setAttribute("width",  "100%");
+    }
+}
+</script>
+<!-- End of Practical boilerplate. -->
+
+<title>Introduction - FSLeyes</title>
+</head>
+
+<body>
+<div id="practical">
+<h1 class="centred">Introduction - FSLeyes</h1>
+
+
+<p>This is the verison of the FSL practical adjusted for use in PYM0FM. The data is stored in <code>/storage/silver/pym0fm/&lt;type your login here&gt;/fsl_course_data/</code>.</p>
+<p><center>---</center></p>
+
+<p>FSLeyes (pronounced <b>fossilise</b>) is the new FSL image viewer for 3D
+and 4D data (replacing FSLView). It does not perform any processing or
+analysis of images - that is done by separate tools. FSLeyes has lots of
+features to visualise data and results in a variety of useful ways, and some
+of these are shown in this introductory practical. You will also be using
+FSLeyes throughout the course, so it is useful to get a feel for it, but many
+more useful features will be included in the course.</p>
+
+
+<p>This practical provides a quick introduction to some FSLeyes features that
+you will be likely to use quite often. For a full overview of what FSLeyes can
+do, take a look at the
+<a href="https://users.fmrib.ox.ac.uk/~paulmc/fsleyes/userdoc/latest/">FSLeyes user
+  guide</a>.
+
+
+<hr/>
+<h2>Getting started</h2>
+
+
+<p>I have copied part of the FSL example data in the PYM0FM Silver drive, in folders for each of you: the path to the PYM0FM silver drive is /storage/silver/pym0fm. Please open a command terminal and type:</p>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/
+ls
+</pre>
+
+<p>This lists all the folders in the shared drive for PYM0FM. There should be one for you, with your university login as a name. If there is not, please tell me.</p>
+
+<p>Then type:</p>
+
+<pre class="bash">
+cd &lt;type your login here&gt;/fsl_course_data/intro
+</pre>
+
+<p>Start FSLeyes by typing:</p>
+
+<pre class="bash">
+fsleyes &
+</pre>
+
+
+<p>The <code>&amp;</code> means that the program you asked for
+(<code>fsleyes</code>) runs in the background in the terminal (or shell), and
+you can keep typing and running other commands while fsleyes continues to
+run. If you had not made <code>fsleyes</code> run in the background (i.e., if
+you had just typed <code>fsleyes</code> without the <code>&amp;</code> at the
+end) then you would not be able to get anything to run in that terminal until
+you killed <code>fsleyes</code> (although you could still type things, but
+they would not run).</p>
+
+
+<p>Other useful Unix info:</p>
+
+<ul>
+  <li>To kill a job that is running (in the &quot;foreground&quot;) in the
+  terminal just type <code>control-c</code></li></li>
+
+  <li>To get a list of jobs running the background, type <code>jobs</code></li>
+
+  <li>To bring something from running in the background to running in the
+  foreground, type <code>fg</code> if it is the last job that was started.</li>
+
+  <li>To force a job that is already running (in the foreground) to be in the
+  background, type <code>control-z</code> and then <code>bg</code>. Note
+  that <code>control-z</code> on its own will give you the terminal prompt
+  back but the job will be sleeping, not running in the background, until you
+  do <code>bg</code>.</li>
+</ul>
+
+<hr/>
+<h2>Basic image viewing</h2>
+
+
+<p>FSLeyes by defaults opens in the <em>ortho view</em> mode. If you add
+image filenames on the command line (after typing <code>fsleyes</code>) it
+will load them all automatically, and you can also add many options from the
+command line. FSLeyes assumes that all of the images which you load share a
+single coordinate system, but images do not have to have the same field of
+  view, number of voxels, or timepoints.</p>
+
+
+<div class="aside">
+Type <code class="bash">fsleyes -h</code> to get an overview on how to use
+FSLeyes from the command line.
+</div>
+
+
+<p>In FSLeyes, load in the image <code>example_func.nii.gz</code>, by pressing
+<em>File &gt; Add from file</em> and selecting the image.
+
+<p>You might need to navigate to the folder fsl_course_data/intro, depending where you were in the filesystem tree of folders when you launched fsleyes.</p>
+
+<p>Once you selected and opened <code>example_func.nii.gz</code>, hold the mouse button down in one of the ortho canvases and move it around
+- see how various things update as you do so:</p>
+
+<ul>
+  <li>the other canvases update their view</li>
+  <li>the cursor's position in both voxel and mm co-ordinates gets updated</li>
+  <li>the image intensity at the cursor is shown</li>
+</ul>
+
+
+<h3>Navigating in an ortho view</h3>
+
+
+<p>You can interact with an orthographic view in a number of ways. Spend a
+couple of minutes trying each of these.</p>
+
+
+<ul>
+  <li>Click, or click and drag on a canvas, to change the current
+  location.</li>
+  <li>Right click and drag on a canvas to draw a zoom rectangle. When you
+  release the mouse, the canvas will zoom in to that rectangle.</li>
+  <li>Hold down the &#8984; key (OSX) or CTRL key (Linux), and use your mouse
+  wheel to zoom in and out of a canvas.</li>
+  <li>Hold down the &#8679; key, and use your mouse wheel to change the
+  current location along the depth axis (change the displayed slice) for that
+  canvas.</li>
+  <li>You can middle-click and drag, or hold down the ALT key and drag with
+  the left mouse button, to pan around.</li>
+</ul>
+
+
+
+<h3>The display toolbar</h3>
+
+
+<img src="display_toolbar.png"
+     style="vertical-align: middle; height: 180px;"
+     alt="Display toolbar"/>
+
+
+<p>The display toolbar allows you to adjust the display properties of the
+  currently selected image.  Play around with the controls and note how the
+  image display changes (but leave the &quot;overlay type&quot; as &quot;3D/4D
+  volume&quot;).
+</p>
+
+<div class="aside">
+The word &quot;overlay&quot; is interchangeable with
+&quot;image&quot;. FSLeyes uses &quot;overlay&quot; because it can also load
+some other non-image file types suck as GIFTI surface images, and FIRST VTK
+files.
+</div>
+
+<ol>
+  <li><b>Overlay display panel:</b> Clicking on the gear button
+    (<img src="gear_icon.png" class="icon"/>) opens a panel with more display
+    settings. </li>
+  <li><b>Overlay information:</b> Clicking on the information button
+    (<img src="information_icon.png" class="icon"/>) opens a panel with
+    information about the image. </li>
+  <li><b>Overlay name:</b> You can change the image name here.</li>
+  <li><b>Overlay type:</b> FSLeyes allows some images to be displayed in
+  different ways. This should be set to &quot;3D/4D volume&quot; most of the
+  time.</li>
+  <li><b>Opacity:</b> Adjust the opacity (transparency) here.</li>
+  <li><b>Brightness/contrast:</b> Quickly adjust the image brightness and
+  contrast here.</li>
+  <li><b>Display range:</b> Use these fields for fine-grained control over
+  how the image data is coloured, instead of using the brightness and contrast
+  sliders. </li>
+  <li><b>Colour map:</b> Choose from several different colour maps.</li>
+  <li><b>Enable -ve colour map</b>If you are viewing an image that has both
+  positive and negative values, this button allows you to enable a colour map
+  that is used for the negative values.</li>
+  <li><b>-ve colour map:</b>Choose a colour map for negative values here.</li>
+</ol>
+
+
+<p>If FSLeyes does not have enough room to display a toolbar in full, it will
+display left and right arrows (<img src="toolbar_left.png" class="icon"/>,
+<img src="toolbar_right.png" class="icon"/>) on each side of the toolbar - you
+can click on these arrows to navigate back and forth through the toolbar.</p>
+
+
+<h3>The ortho toolbar</h3>
+
+
+<img src="ortho_toolbar.png"
+     style="vertical-align: middle; height: 160px;"
+     alt="Ortho toolbar"/>
+
+
+<p> The ortho toolbar allows you to adjust and control the ortho view. Play
+with the controls, and try to figure out what each of them do.
+</p>
+
+<ol>
+  <li><b>View settings panel</b>: Clicking on the spanner button
+    (<img src="spanner_icon.png" class="icon"/>) opens panel with advanced
+    ortho view settings.</li>
+
+  <li><b>Screenshot</b>: Clicking on the camera button
+    (<img src="camera_icon.png" class="icon"/>) will allow you to save the
+    current scene, in this ortho view, to an image file.</li>
+
+  <li><b>Toggle canvases</b>: These three buttons
+    (<img src="sagittal_icon.png" class="icon"/>, <img src="coronal_icon.png"
+    class="icon"/>, <img src="axial_icon.png" class="icon"/>) allow you to
+    toggle each of the three canvases on the ortho view.</li>
+
+  <li><b>Canvas layout</b>: These three buttons
+    (<img src="horizontal_icon.png" class="icon"/>,
+    <img src="vertical_icon.png" class="icon"/>, <img src="grid_icon.png"
+    class="icon"/>) allow you to choose between laying out the canvases
+    horizontally, vertically, or in a grid.</li>
+
+  <li><b>Movie mode</b>: This button (<img src="movie_icon.png"
+    class="icon"/>) enables <em>movie mode</em> - if you load a 4D image, and
+    turn on movie mode, the image will be &quot;played&quot; as a movie (the
+    view will loop through each of the 3D images in the 4D volume).</li>
+
+  <li><b>Toggle cursor/labels</b>: This button (<img src="plus_icon.png"
+    class="icon"/>) allows you to toggle the anatomical labels and location
+    cursor on and off.</li>
+
+  <li><b>Reset zoom</b>: This button (<img src="reset_zoom_icon.png"
+    class="icon"/>) resets the zoom level to 100&#37; on all three
+    canvases.</li>
+
+  <li><b>Zoom slider</b>: Change the zoom level on all three canvases with
+  this slider.</li>
+</ol>
+
+
+<h3>Multiple views: lightbox</h3>
+
+
+<p>Open a <em>lightbox</em> view using <em>View &gt; Lightbox View</em>. If
+you drag the mouse around in the viewer you can see that the cursor position
+is linked in the two views of the data (the ortho and the lightbox
+views). This is particularly useful when you have several images loaded in at
+the same time (you can view each in a separate view window and move around all
+of them simultaneously).
+</p>
+
+
+<img src="lightbox_toolbar.png"
+     style="vertical-align: middle; height: 210px;"
+     alt="Lightbox toolbar"/>
+
+
+<p>The lightbox view has a slightly different toolbar to the ortho toolbar.</p>
+
+
+<ol>
+  <li><b>View settings panel:</b> Clicking on the spanner button opens a panel
+  with advanced lightbox view settings.</li>
+  <li><b>Screenshot:</b> Clicking on the camera button will allow you to save
+  the current scene, in this lightbox view, to an image file.</li>
+  <li><b>Z axis:</b> These three buttons allow you to choose which
+  slice plane to display in the lightbox view.</li>
+  <li><b>Movie mode:</b> This button enables movie mode.</li>
+  <li><b>Slice range:</b> These sliders allow you to control the beginning and
+  end points of the slices that are displayed.</li>
+  <li><b>Zoom:</b> This button allows you to control how many slices are
+  displayed on the lightbox view.</li>
+  <li><b>Slice spacing:</b> This slider allows you to control the spacing
+  between consecutive slices.</li>
+</ol>
+
+
+<h3>Unlinking cursors</h3>
+
+
+<p>You can &quot;unlink&quot; the cursor position between the two views (it is
+  linked by default). Go into one of the views, e.g., the lightbox view, and
+  press the spanner button (<img src="spanner_icon.png" class="icon"/>).  This
+  will open the lightbox view settings panel.  Turn off the <b>Link
+  Location</b> option, and close the view settings panel.. You will now find
+  that this view (the lightbox view) is no longer linked to the
+  &quot;global&quot; cursor position, and you can move the cursor
+  independently (in this view) from where it is in the other views.
+</p>
+
+
+<p>Close the lightbox view for now (click on the small red circle or X at the
+very top of the view). </p>
+
+
+<hr/>
+<h2>Viewing multiple images</h2>
+
+
+<p>Now load in a second image (<code>thresh_zstat1</code>) using
+<em>File &gt; Add overlay from file</em>.  This image
+(<code>thresh_zstat1</code>) is a thresholded FMRI activation image. In the
+bottom-left panel is a list of loaded images - the <em>overlay list</em>.</p>
+
+
+<img src="overlay_list.png"
+     style="vertical-align: middle; height: 150px;"
+     alt="Overlay list"/>
+
+
+<p>The overlay list shows the images which are currently loaded into
+FSLeyes. When you select an image in this list, it becomes the <b>currently
+selected</b> image - in FSLeyes, you can only select one image at a time.</p>
+
+
+<p>You can use the controls on the display toolbar to adjust the display
+properties of the currently selected image.Select the image you just loaded
+(<code>thresh_zstat1</code>), and use the display toolbar to change its colour
+map to <em>Red-yellow</em>. </p>
+
+
+<p>The overlay list allows you to do the following:</p>
+
+
+<ul>
+<li>Change the currently selected overlay, by clicking on the overlay
+  name.</li>
+
+<li>Identify the currently selected overlay (highlighted in blue).</li>
+
+<li>Add/remove overlays with the + and - buttons.</li>
+
+<li>Change the overlay display order with the &#x25B2; and &#x25BC;
+  buttons.</li>
+
+<li>Show/hide each overlay with the eye button (<img src="eye_icon.png"
+ class="icon"/>), or by double clicking on the overlay name.</li>
+
+<li>Link overlay display properties with the chainlink button
+  (<img src="chainlink_icon.png" class="icon"/>).</li>
+
+<li>Save an overlay if it has been edited, with the floppy disk button
+  (<img src="floppy_disk_icon.png" class="icon"/>).</li>
+
+<li>Left-click and hold the mouse button down on the overlay name to view the
+  overlay source (e.g. its location in the file system).</li>
+
+</ul>
+
+
+
+<hr/>
+<h2>Image information</h2>
+
+
+<p>In the bottom right corner of the FSLeyes window you will find the location
+panel, which contains information about the current cursor location, and image
+data values at that location.</p>
+
+
+<img src="location_panel.png"
+     style="vertical-align: middle; height: 140px;"
+     alt="Location panel"/>
+
+
+<p>The controls on the left show the cursor location in &quot;world&quot;
+coordinates (millimetres).  This coordinate system will change depending upon
+whether your image is in native subject coordinates, standard template
+coordinates (e.g. MNI152), or some other coordinate space.</p>
+
+
+<p>The controls in the middle show the cursor location in voxel coordinates,
+relative to the currently selected image. If the currently selected image is
+4D (e.g. a time series image), the bottom control displays the currently
+selected volume (e.g. time point).</p>
+
+
+<p>The area on the right displays the intensity value and voxel location at
+the current cursor location for all loaded images. Note that if you have
+images with different resolutions loaded, the voxel location will be different
+for each of them.</p>
+
+
+<hr/>
+<h2>Viewing time series (4D images)</h2>
+
+
+<p>Now remove all of the images you have loaded (<span class="hint">you can
+remove all images via the <em>Overlay &gt; Remove all</em> menu
+option</span>), and load in <code>filtered_func_data</code>, a 4D FMRI time
+series. Watch this as a movie by pressing the movie button
+(<img src="movie_icon.png" class="icon"/>) on the ortho toolbar. The data
+changes very subtly over time, so you may wish to adjust the brightness and
+contrast in order to see the data changing.  Note that, when movie mode is
+running, the volume index in the location panel scrolls through the different
+time-point values. Note also that whilst the movie is running you can still
+change the cursor position. Stop the movie by pressing the movie button
+again.</p>
+
+<div class="aside">
+You can increase the speed at which the movie plays by opening the view
+settings panel (<img src="spanner_icon.png" class="icon"/>), and adjusting
+the <b>Movie update rate</b> slider.
+</div>
+
+
+<p>Re-load the <code>thresh_zstat1</code> stats overlay image back in.  Make
+sure the <code>filtered_func_data</code> image is selected in the overlay
+list, and open a time series plot view via <em>View &gt; Time
+series</em>. Note that the FMRI time series data for the current voxel
+in <code>filtered_func_data</code> is plotted in the time series view. </p>
+
+
+<p>The time series toolbar allows you to control a few aspects of how
+time series are plotted.</p>
+
+
+<img src="timeseries_toolbar.png"
+     style="vertical-align: middle; height: 180px;"
+     alt="Time series toolbar"/>
+
+
+<ol>
+
+<li><b>Plot control panel</b>: This button opens the plot control panel, which
+   contains all available plot settings.</li>
+
+<li><b>Plot list</b>: This button opens the plot list, which allows you to add
+   and remove time series, and to customise the ones which are currently being
+   plotted.</li>
+
+<li><b>Screenshot</b>: This button allows you to save the current plot as a
+   screenshot.</li>
+
+<li><b>Import data series</b>: This button opens a file selection dialog, with
+   which you can choose a file to import time series from.</li>
+
+<li><b>Export data series</b>: This button allows you to export the time
+   series which are currently plotted to a text file.</li>
+
+<li><b>Add data series</b>: This button &quot;holds&quot; the plotted time
+   series for the currently selected image, at the current voxel.</li>
+
+<li><b>Remove data series</b>: This button removes the most recently
+  &quot;held&quot; time series from the plot.</li>
+
+<li><b>Plotting mode</b>: This option allows you to choose from a few
+  different scaling options to apply to the time series (e.g. demeaning,
+  normalisation).</li>
+
+</ol>
+
+
+Search through the <code>thresh_zstat1</code> image until you find a
+&quot;highly activated&quot; voxel. Press the add button
+(<img src="plus_icon.png" class="icon"/>) on the time series toolbar to add
+that voxel's time series to the plot. You can add more time series by moving
+to new voxels and clicking the add button again.</p>
+
+
+<p>If you have added several time series to the display, they may all have
+quite different mean values, making comparison difficult - change
+the <b>Plotting mode</b> drop down menu to <b>Demeaned</b> to demean all
+displayed time series. You can also also choose to scale the time series
+to <b>Percent changed</b>. (i.e. in this case you're now seeing the BOLD &#37;
+signal change values). </p>
+
+
+<p>When you are finished exploring the time series, close the time series
+view. </p>
+
+
+<hr/>
+<h2>Viewing image histograms</h2>
+
+
+<p>Image histograms give you an overview of all of the intensities within an
+image. A histogram plots the distribution of intensities in the image; image
+intensity is on the x axis and the number of voxels with that intensity is on
+the y axis. Histograms are used as part of structural segmentation methods and
+can be useful for QC purposes.</p>
+
+
+<p>Close all overlays (<em>Overlay &gt; Remove all</em>). Open
+<code>structural</code> and select <em>View &gt; Histogram</em> to view a
+basic histogram.</p>
+
+
+<img src="histogram_toolbar.png"
+     style="vertical-align: middle; height: 180px;"
+     alt="Histogram toolbar"/>
+
+
+<p>The histogram toolbar is very similar to the time series
+  toolbar, with a few extra options:</p>
+
+<ol start="8">
+  <li><b>Histogram type</b>: This setting allows you to control the y axis
+    scale - choosing <b>Count</b> will plot the raw histogram bin counts, and
+    choosing <b>Probability</b> will scale the histogram bin counts by the
+    total number of data points used in the histogram calculation.</li>
+  <li><b>Histogram overlay</b>: This button
+  (<img src="histogram_overlay_icon.png" class="icon"/>) allows you to toggle
+  an image on and off which displays all of the voxels that have been included
+  in the histogram plot.</li>
+</ol>
+
+
+<p>When you are ready, close the histogram view and continue to the next
+  section. </p>
+
+
+<hr/>
+<h2>Viewing FMRI analysis results</h2>
+
+
+<p>Finally, we'll look at some more advanced FMRI analysis features in
+FSLeyes. Kill FSLeyes, then switch back to your terminal and type:
+</p>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your login&gt;/fsl_course_data/fmri/ptt/at/at_left.feat
+fsleyes -ad filtered_func_data stats/zstat1 stats/zstat2
+</pre>
+
+
+<div class="aside">
+  The <code>-ad</code> flag is short for <code>--autoDisplay</code>, which
+  tells FSLeyes to automatically adjust the display properties for certain
+  types of images. In this case, the <code>zstat1</code>
+  and <code>zstat2</code> images are thresholded and given bright colour maps.
+</div>
+
+
+<p>You are now in an example FMRI analysis FEAT output directory. The image
+  names on the <code>fsleyes</code> command line tell FSLeyes to load in each
+  of these images, to save you having to load them in by hand in the GUI. </p>
+
+
+<p>Because we are viewing a FEAT analysis, it makes sense to change into FEAT
+  mode: <em>View &gt; Perspectives &gt; FEAT mode</em>. Then, on the time
+  series toolbar, change the <b>Plotting mode</b> to <b>Normalised</b>.
+
+
+<p>One of the nice features when in FSLeyes &quot;FEAT mode&quot; is that you
+can see a plot of the fitted timeseries model versus the data. You can also
+plot various other aspects of the FEAT model fitting process - click on the
+spanner button (<img src="spanner_icon.png" class="icon"/>) on the time series
+toolbar, expand the <b>FEAT settings for selected overlay</b> section, and
+experiment with the settings.  If none of the settings mean anything to you,
+don't worry - they will make more sense after the first FEAT lecture!</p>
+
+
+<p>This FEAT output directory already contains versions of some of the images
+upsampled to &quot;standard space&quot; - the common image space that
+multisubject analyses are carried out in, which allows us to interact with the
+FSL atlases. Close FSLeyes and run:</p>
+
+
+<pre class="bash">
+fsleyes -ad reg_standard/reg/highres.nii.gz reg_standard/stats/cope1
+</pre>
+
+
+<div class="aside">
+  Note that in this case, the <code>-ad</code> flag configured
+  the <code>cope1</code> image so that positive COPE values are shown in
+  red-yellow, and negative COPE values are shown in blue.
+</div>
+
+
+<p>You might like to change the minimum display range value to 50, in the
+display toolbar, so that only strong activations (high COPE values) are
+shown. It is also possible to enable interpolation for the COPE image, to make
+the blobs look nicer - you can turn on interpolation in the display panel
+(<img src="gear_icon.png" class="icon"/>).</p>
+
+
+<hr/>
+<h2>Viewing Atlases</h2>
+
+
+<p>Because these images are in standard space, we can turn on the atlas tools
+with <em>Settings &gt; Ortho View 1 &gt; Atlas Panel</em>. Now as you click
+around in the image you can see reporting of the probability of being in
+different brain structures. You might want to resize the different FSLeyes
+panels to increase the size of the Atlas information space (in general you do
+this by dragging around the edges of the different FSLeyes panels).</p>
+
+
+<p>The atlas panel is organised into three main sections -
+<em>Atlas information</em>, <em>Atlas search</em>, and <em>Atlas
+management</em>. These sections are accessed by clicking on the tabs at the
+top of the panel. We will only cover the first two sections in this
+introductory practical.</p>
+
+
+<h3>Atlas information</h3>
+
+
+<p>The <b>Atlas information</b> tab displays information about the current
+display location, relative to one or more atlases:</p>
+
+
+<img src="atlas_info_panel.png"
+     style="vertical-align: middle; height: 200px;"
+     alt="Atlas information panel"/>
+
+
+<p>The list on the left allows you to select the atlases that you wish to
+query - click the check boxes to the left of an atlas to toggle information on
+and off for that atlas. The Harvard-Oxford cortical and sub-cortical
+structural atlases are both selected by default.  These are formed by
+averaging careful hand segmentations of structural images of many separate
+individuals. </p>
+
+
+<p>The panel on the right displays information about the current display location
+from each selected atlas. For probabilistic atlases, the region(s)
+corresponding to the display location are listed, along with their
+probabilities. For discrete atlases, the region at the current location is
+listed.</p>
+
+
+<p>You may click on the <b>Show/Hide</b> links alongside each atlas and region
+name to toggle corresponding atlas images on and off.</p>
+
+
+<h3>Atlas search</h3>
+
+
+<p>The <b>Atlas search</b> tab allows you to browse through the atlases, and
+search for specific regions.</p>
+
+
+<img src="atlas_search_panel.png"
+     style="vertical-align: middle; height: 200px;"
+     alt="Atlas search panel"/>
+
+
+<p>The list on the left displays all available atlases - the checkbox to the left
+of each atlas toggles an image for that atlas on and off.</p>
+
+
+<p>When you select an atlas in this list, all of the regions in that atlas are
+listed in the area to the right. Again, the checkbox to the left of each
+region name toggles an image for that region on and off. The + button next to
+each region moves the display location to the (approximate) centre of that
+region.</p>
+
+
+<p>The search field at the top of the region list allows you to filter the
+regions that are displayed.</p>
+
+
+<img src="atlas_region_search.png"
+     style="vertical-align: middle; height: 200px;"
+     alt="Atlas region search"/>
+
+
+<p>When you type some characters into the search field, the region list will
+be filtered, so that only those regions with a name that contains the
+characters you entered are displayed. The atlas list on the left will also be
+updated so that any atlases which contain regions matching the search term are
+highlighted in <b>bold</b>.</p>
+
+
+
+<p>Use the atlas search feature to locate the thalamus (left or right); you
+should be able to see that there is activation here. </p>
+
+
+<p>Spend some time with the atlas panel. Look at the information for some
+other atlases (click the checkbox next to some of the atlas names). In
+particular, the Juelich atlas is very complementary to the Harvard-Oxford
+atlases (being derived from post-mortem histological segmentations), as are
+the JHU atlases (being derived from diffusion MRI data). </p>
+
+
+<p>Quit FSLeyes when you have finished looking at the atlases. </p>
+
+
+<hr/>
+<p class="centred">The End.</p>
+</div>
+</body>
+</html>

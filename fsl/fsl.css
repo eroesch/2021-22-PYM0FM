@@ -1,0 +1,245 @@
+
+body {
+     background-image: url("fsl-bg.jpg");
+     font-family: 'Arial';
+     margin-top: 0px;
+     padding-top: 0px;
+}
+
+hr {
+    clear : both;
+}
+
+object	{ width: 100% ; height: 170px }
+iframe	{ width: 100% ; height: 170px }
+
+a:link {text-decoration: none}
+a:visited {text-decoration: none}
+a:active {text-decoration: none}
+a:hover {text-decoration: underline; color: red;}
+
+ul { margin-top: 0px; }
+img { border-style: hidden; }
+
+.floatright {float: right; margin: 2em 0em 2em 2em; }
+.floatleft {float: left; margin: 2em 2em 0em 2em; }
+.centred {text-align: center; margin-left: auto; margin-right: auto; }
+
+#header {
+	margin-top: 2px;
+	font-family: 'Arial';
+}
+
+#header h1.fslheader {
+	font-family: 'Arial';
+	font-weight: bold;
+	font-size: 200%;
+	margin: 0em;
+	padding: 0em;
+}
+
+#header img.logo {
+	margin-top: 5px;
+	margin-left: 5px;
+	float: right;
+}
+
+#header table {
+	text-align: center;
+	border-style: hidden;
+	margin-top: 0em;
+	margin-bottom: 0em;
+	padding-top: 0em;
+	padding-bottom: 0em;
+}
+
+#practical {
+    margin: 20px 20px 20px 20px;
+}
+
+#practical dl.contents dt {
+    display: list-item;
+    list-style-type: disc;
+    font-weight: bold;
+    margin-left: 3em;
+}
+
+#practical dl.contents dd {
+    margin-left: 3em;
+}
+
+#practical h1 {
+    line-height: 150%;
+}
+
+
+#practical p.optional:before {
+    content: "Optional: ";
+    font-weight: bold;
+}
+
+
+#practical div.answer {
+    padding          : 10px;
+    margin           : auto;
+    border           : 1px solid black;
+    background-color : #eeeeff;
+    border-radius    : 10px;
+}
+
+.clickme {
+    color: blue;
+    cursor: pointer;
+}
+
+dl.horiz-ital dt:after, dl.horiz dt:after {
+    content : ":";
+}
+
+
+dl.horiz-ital dt, dl.horiz dt {
+    float         : left;
+    clear         : left;
+    text-align    : right;
+    width         : 20%;
+    margin-right  : 1em;
+    font-weight   : bold;
+}
+
+dl.horiz dd {
+    margin     : 0 0 0 22%;
+    padding    : 0 0 0.5em 0;
+    font-style : normal;
+}
+
+dl.horiz-ital dd {
+    margin     : 0 0 0 10px;
+    padding    : 0 0 0.5em 0;
+    font-style : italic;
+}
+
+ul.pad-after li {
+    padding-bottom: 1em;
+}
+
+ul.no-pad {
+    padding-bottom: 1em;
+    padding-top: 1em;
+}
+
+ul.no-pad li {
+    padding-bottom: 0;
+}
+
+.red {
+    color: red;
+}
+
+/*************
+ * Code blocks
+ *************/
+
+pre {
+    display       : inline-block;
+    border        : 1px solid black;
+    padding       : 10px;
+    margin        : 20px;
+    border-radius : 4px;
+}
+
+
+pre.bash {
+    background-color : #e0e0e0;
+}
+
+
+/*
+ * Suppress background for code blocks
+ * which are contained inside a showhide div.
+ */
+div.answer pre.bash {
+    background : rgba(255,255, 255, 0.5);
+}
+
+
+pre.matlab {
+    background-color : #ffd0a0;
+}
+
+pre.dontrun:before {
+    content: "[Don't run this!]\A\A";
+}
+pre.dontrun {
+    background-color : #eea0a0;
+}
+
+
+pre.listing {
+    border : 0.5px dashed gray;
+}
+
+/* <code> is used for inline stuff */
+code.bash {
+    border           : 0.5px solid gray;
+    border-radius    : 4px;
+    background-color : #e0e0e0;
+    padding          : 2px;
+
+}
+
+
+/***************
+ * 'Aside' boxes
+ ***************/
+
+
+div.aside {
+    font-size        : 75%;
+    float            : right;
+    padding          : 10px;
+    margin           : 10px;
+    width            : 290px;
+    overflow         : auto;
+    background-color : #ccffcc;
+    border           : 1px solid black;
+    border-radius    : 10px;
+}
+
+div.aside:before {
+    content:     "Aside";
+    font-style:  italic;
+    font-weight: bold;
+    display:     block;
+    text-align : center;
+}
+
+
+
+/**********************
+ * Inline "icon" images
+ **********************/
+
+
+img.icon {
+    vertical-align: middle;
+    height:         16px;
+}
+
+/***************************************
+ * An important notice that must be read
+ /**************************************/
+
+
+div.notice {
+    display          : block;
+    padding          : 10px;
+    margin           : auto;
+    width            : 80%;
+    background-color : #ffffbb;
+    border           : 5px dashed red;
+    border-radius    : 10px;
+}
+
+div.grad_course_only {
+    display          : none;
+}

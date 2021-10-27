@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+
+<!-- Start of Practical boilerplate. -->
+<link rel="stylesheet" type="text/css" href="../../../fsl/fsl.css" />
+<link rel="stylesheet" type="text/css" href="../../../fsl/quiz.css">
+<link rel="stylesheet" type="text/css" href="../../../fsl/viz.css">
+
+<script type="text/javascript" src="../../../fsl/quiz.js"></script>
+<script type="text/javascript" src="../../../fsl/showhide.js"></script>
+<script type="text/javascript" src="../../../fsl/viz.js"></script>
+<script type="text/javascript">
+window.onload=function() {
+    setupQuizQuestions();
+    var graphs = document.querySelectorAll(".viz-graph");
+    var parser = new DOMParser;
+    for (var i = 0; i < graphs.length; i++){
+        var div = graphs[i];
+        var dom = parser.parseFromString(div.innerHTML, "text/html");
+        div.innerHTML = Viz(dom.body.textContent);
+        var svg = div.querySelector("svg");
+        svg.setAttribute("width",  "100%");
+    }
+}
+</script>
+<!-- End of Practical boilerplate. -->
+
+
+<title>FEAT 1 Practical</title>
+</head>
+
+
+<body>
+<div id="practical">
+<h1 class="centred">FEAT 1 Practical</h1>
+
+
+<p>This tutorial leads you through a standard single-subject analysis with
+FEAT. There may be moments when you are waiting for programs to run; during
+those times take a look at the
+FEAT <a href="../../../../fsl/fslwiki/FEAT.html"
+target="dynamic">manual</a> (in particular go to the <b>User Guide</b> and
+look at the <em>FEAT in Detail</em> section). We also suggest that you do read
+it carefully after the course, before using FEAT for analysing your own
+data.</p>
+
+
+<h2>Contents:</h2>
+<dl class="contents">
+  <dt> <a href="#fluency">Example real fmri-fluency dataset</a></dt>
+  <dd> Perform a full first-level analysis of a single subject in an
+    event-related language experiment.</dd>
+  <dt> <a href="#featquery">Featquery</a></dt>
+  <dd> Use featquery to interrogate results of the previous analysis
+    and extract ROI measurements.</dd>
+</dl>
+
+
+<hr/>
+<h2><a name="fluency">Example real fmri-fluency dataset</a></h2>
+
+
+<pre class="bash">cd ~/fsl_course_data/fmri1/fluency_task</pre>
+
+
+<p>The dataset <code>fmri.nii.gz</code> is from a language experiment. The TR
+is 4.2 seconds. The experiment is event-related and has three different types
+of events:</p>
+
+
+<ol>
+<li><b>Word-generation events (WG)</b>: Here the subject is presented with a noun,
+  say for example &quot;car&quot; and his/her task is to come up with a
+  pertinent verb (for example &quot;drive&quot;) and then &quot;think that
+  word in his/her head&quot;. The subject was explicitly instructed never to
+  say or even mouth a word to prevent movement artefacts.</li>
+
+<li><b>Word-shadowing events (WS)</b>: Here the subject is presented with a verb
+  and is instructed to simply &quot;think that word in his/her
+  head&quot;.</li>
+
+<li><b>Null-events (N)</b>: These are events where nothing happens, i.e. the
+  cross-hair remains on the screen and no word is presented. The purpose of
+  these &quot;events&quot; is to supply a baseline against which the other two
+  event types can be compared.</li>
+</ol>
+
+
+<p>Note that there were no additional &quot;instruction events&quot; as part
+of the experiment. Each event was &quot;its own instruction&quot; in that the
+class of the word determines the task. This means that even the
+&quot;shallow&quot; word-shadowing events contain an element of grammatical
+decoding.</p>
+
+
+<p>Within one session, the events were presented at a constant ISI (Inter
+Stimulus Interval) of 6 seconds. For example, the first 72 seconds (twelve
+events) in this session may have looked like:</p>
+
+
+<pre class="listing">
+N-WS-N-WS-N-WS-N-WG-N-WS-WG-N
+</pre>
+
+<p>The randomisation of event types was &quot;restricted&quot; in the sense
+that there was an equal number (24) of each event type. In other words, at any
+given ISI each type of event was equally likely.</p>
+
+
+<p>The main question for this experiment was to see if the &quot;deeper&quot;
+language processing in the word-generation task would yield activations over
+and above that of the shallower processing in the word-shadowing task. But
+there are also other interesting questions you can ask of the data. So, let us
+get started with the analysis.</p>
+
+
+<pre class="bash">Feat &amp;</pre>
+
+
+<p>(Type <code class="bash">Feat_gui &amp;</code> if you are on a Mac).</p>
+
+
+<hr/>
+<h3>Data</h3>
+
+
+<p>Feat starts by displaying the <b>Data</b> tab.  Press <b>Select 4D data</b>
+and select <b>fmri.nii.gz</b> (don't just type &quot;fmri.nii.gz&quot; in the
+file select popup or you probably won't end up setting the full pathname; use
+the file-select icon on the right to select the input data).</p>
+
+
+<p>FEAT now knows how many time points (volumes) you have (106 in this
+dataset). The GUI will set the TR (time between 3D volumes) using information
+in the NIFTI file, however this information is not always correct (depending
+on how the conversion to NIFTI was done).  So you should always check that the
+value for TR is correct after the FMRI data is loaded. For these data it
+should be 4.2 seconds (you might get 4.199, and that is ok).</p>
+
+
+<p>The <b>High pass filter cutoff</b> is preset to <b>100secs</b>.  This is
+chosen to remove the worst of the low frequency trends, and is also long
+enough to avoid removing the signal of interest.  In general you need to
+ensure that this is not set lower than your maximum stimulation period. For a
+random-order event-related design there is no clear &quot;stimulation
+period&quot; so in order to assess what the cutoff should be one needs to
+analyse the frequency-content of our expected activations (remember that the
+design matrix embodies what we expect to see in the brain). Leave it at the
+default for now and we'll come back to it when we have specified the
+design.</p>
+
+
+<hr/>
+<h3>Pre-stats and Stats</h3>
+
+
+<p>Press the <b>Pre-stats</b> tab to look at the preprocessing steps. For this
+experiment we will change <b>Spatial smoothing FWHM (mm)</b> to 7mm, which is
+slightly more than we normally recommend. All the other default pre-processing
+  steps are fine for this dataset.</p>
+
+
+<h4>Setting up the design matrix</h4>
+
+
+<p>Select the <b>Stats</b> tab and press <b>Full model setup</b> to setup the
+  GLM details.</p>
+
+
+<p>Change the <b>Number of EVs</b> to <b>2</b> (we have two
+  conditions to model separately - Word-generation and Word-shadowing).</p>
+
+
+<p>Setup <b>EV1</b> (Word-generation): First chose a sensible name like
+for example <b>Gen</b> for it and change <b>Basic shape</b> to
+<b>Custom (3 column format)</b> and select the file <code>word_generation.txt</code>.
+Later (when you wait for FEAT to finish the analysis) we will return to
+this file and make sure you understand what is in it. Next set
+<b>Convolution</b> to <em>Double-Gamma HRF</em> which corresponds to the HRF
+you saw in the talks. Leave the setting for <b>Phase</b>, to the default but
+<em>unset</em> <b>Add temporal derivative</b>.  We would normally recommend
+leaving it set (and we will come back to set it) but in order to obtain a very
+simple initial design we will unset it for now.</p>
+
+
+<p>Setup <b>EV2</b> (Word-shadowing): Chose a name (for example <b>Shad</b>
+and change <b>Basic shape</b> to <b>Custom (3 column format)</b> and this time
+select the file <code>word_shadowing.txt</code>. Same as for <b>EV1</b> set
+<b>Convolution</b> to <em>Double-Gamma HRF</em>, unset <b>Add temporal
+  derivative</b> and leave everything else as the defaults. </p>
+
+
+<h4>Setting up contrasts</h4>
+
+
+<p>Now set up the <b>Contrasts</b> (click on the <b>Contrasts &amp;
+F-tests</b> tab. Set the <b>Number of contrasts</b> to 5 and enter the
+following contrasts:</p>
+
+<ol>
+  <li>Name the first contrast <b>Generation</b>. Set the contrast to be
+    sensitive to the activation in word-generation above and beyond that in
+    rest.
+    <span class="clickme" onclick="showIt('hint1')">answer</span>
+    <p>
+    <div id="hint1" class="answer" style="display: none"><b>[1 0]</b></div>
+    </p>
+  </li>
+
+  <li>Name the second contrast <b>Shadowing</b>. Set the contrast to be
+    sensitive to the activation in word-shadowing above and beyond that in rest.
+
+    <span class="clickme" onclick="showIt('hint2')">answer</span>
+    <p>
+      <div id="hint2" class="answer" style="display: none"><b>[0 1]</b></div>
+    </p>
+  </li>
+
+  <li>Name the third contrast <b>Mean</b>. Set the contrast to be sensitive to
+    the mean activation in word-generation and word-shadowing being larger
+    than in rest.
+
+    <span class="clickme" onclick="showIt('hint3')">answer</span>
+    <p>
+      <div id="hint3" class="answer" style="display: none"><b>[1 1]</b></div>
+    </p>
+  </li>
+
+
+  <li>Name the fourth contrast <b>Shad &gt; Gen</b>. Set the contrast to be
+    sensitive to the activation in word-shadowing above and beyond that in
+    word-generation.
+
+    <span class="clickme" onclick="showIt('hint4')">answer</span>
+    <p>
+      <div id="hint4" class="answer" style="display: none"> <b>[-1 1]</b> </div>
+    </p>
+  </li>
+
+
+  <li>Name the fifth contrast <b>Gen &gt; Shad</b>. Set the contrast to be
+    sensitive to the activation in word-generation above and beyond that in
+    word-shadowing.
+
+    <span class="clickme" onclick="showIt('hint5')">answer</span>
+    <p>
+      <div id="hint5" class="answer" style="display: none"> <b>[1 -1]</b> </div>
+    </p>
+  </li>
+</ol>
+
+<p>Next set up an <b>F-test</b>. Set the <b>Number of F-tests</b> to 1
+and select the first two contrasts. This spans both conditions and will
+show you any areas where there is significant activation by Word-generation
+<em>AND/OR</em> Word-shadowing. Thus the sixth output colour overlay image
+produced will show where either generation or shadowing activation (or both)
+occurs; i.e. it will show both on a single image.</p>
+
+<div class="quiz_question">
+
+  <span class="question">If you would set up a second F-tests that has contrasts 3 and 4
+selected, what would the resulting map show?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>Regions in which both the mean and the difference between word shadowing and word generation contrasts showed significant effects</label>
+    <span id="option1" class="answer incorrect">Incorrect! An F-tests answers the 'or' question, so any significant result in any of the contrasts entered into the F-test will show up in the resulting map</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>Regions in which either the mean contrasts, or the difference between word shadowing and word generation (regardless of the direction of the difference) showed significant effects</label>
+    <span id="option2" class="answer correct">Correct! The F-test is sensitive to both Shad &gt; Gen and to Gen &gt; Shad, and also to both negative and positive mean effects</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>Regions in which either the mean contrasts, or the difference between word shadowing and word generation (only when Shad &gt; Gen, but not for Gen &gt; Shad) showed significant effects</label>
+    <span id="option3" class="answer incorrect">Incorrect! Remember that the F-test is not signed. Therefore, it would be sensitive to both Shad &gt; Gen and to Gen &gt; Shad, even though only contrast 4 (and not contrast 5) is entered</span><br/>
+  </form>
+</div>
+
+<p>Bonus question: Will the F-test with contrasts 1 and 2, and the F-tests with contrasts 3 and 4 result in the same maps or in different maps?
+
+<span class="clickme" onclick="showIt('hint6')">answer</span>
+<div id="hint6" class="answer" style="display: none"> The F-test asks whether
+any combination of the selected contrasts explains a significant portion of
+the variance in the data. Any contrast that can be created by combining
+contrasts 1 and 2 can also be created by combining contrasts 3 and 4 and the
+other way around. For example, contrast 3 can be created by adding contrasts 1
+and 2. So an F-test with contrasts 3 and 4 would end up testing all the same
+possible combinations as an F-test with contrasts 1 and 2 and hence give
+exactly the same results. Feel free to add an additional F-test with contrasts
+3 and 4 to test this.</div>
+</p>
+
+<p>Press <b>View design</b>. Make sure you understand the resulting design
+matrix. Time goes down the page, with every 10 TRs ticked off on the left. The
+red bar shows the width of the highpass filter (the amplitude of any signal
+much longer than it will get reduced). There are 2 columns in the design
+corresponding to our predictions about BOLD activity from Word-generation and
+Word-shadowing respectively. Hopefully they will be familiar from the talk you
+have just heard. The contrasts appear at the bottom of the image, with the
+F-test to the right of the contrasts. Note that you can make the design matrix
+display disappear just by clicking on it once. For now, leave the design
+matrix display up (Press <b>View design</b> again if necessary).</p>
+
+
+<h4>Temporal derivatives</h4>
+
+
+<p>Now, return to the <b>EVs</b> tab and FOR BOTH EVs select
+<b>Add temporal derivative</b>.</p>
+
+
+<p>Press <b>View design</b> again. You now see 4 columns with columns 1 and 3
+being the same as before and column 2 and 4 being &quot;new&quot;. These are
+the temporal derivatives that are used to correct for timing errors caused
+either by slight experimental errors in synchronising the times of the scanner
+with the stimulus presentation and/or inter-subject differences in the delay
+inherent in the HRF.  Now press &quot;Done&quot; and dismiss the view of the
+design matrix.</p>
+
+
+<p>Do you remember that we said we should return to the issue of
+<b>High pass filtering</b> once we knew the design (and with that
+the expected frequency content of the signal we expect/hope to see)?
+Now the time has come. Press the <b>Data</b>-tab to make sure
+that <b>High pass filter cutoff (s)</b> is set to 100. Next press
+the <b>Misc</b>-tab where there will be a button saying
+<b>Estimate High Pass Filter</b>. Press this button and then go back to
+the <b>Data</b>-tab to see what has happened. This should now have changed to
+90 seconds. FSL has calculated this for you by analysing the frequency content
+of the design and then selected a cutoff so that 90&#37; of our expected
+signal is still in the data after filtering. (N.B. that it is just a fluke
+that 90&#37; happened to translate into 90 seconds in this particular
+case)</p>
+
+
+<p>Look at the <b>Post-stats</b> section - the defaults are fine;
+cluster-based thresholding will be carried out.</p>
+
+<div class="quiz_question">
+
+  <span class="question">What does high pass filtering do to your data?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>It removes frequencies that are faster than the cutoff, which mainly contain noise</label>
+    <span id="option1" class="answer incorrect">Incorrect! A high pass filter lets frequencies faster than the cutoff pass through, but removes frequencies lower than the cutoff</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>It removes frequencies that are slower than the cutoff, in order to remove noise</label>
+    <span id="option2" class="answer correct">Correct! Fluctuations that are slower than the cutoff are filtered out of the data. This is useful to remove scanner drift (a slow change in the measured signal from the start to the end of the scan)</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>It performs temporal smoothing of the timeseries</label>
+    <span id="option3" class="answer incorrect">Incorrect! A low pass filter (which removes frequencies faster than the cut off) results in a smoother timeseries, but a high pass filter removes the slowest frequencies (to remove noise such as scanner drift)</span><br/>
+  </form>
+</div>
+
+<hr/>
+<h3>Registration</h3>
+
+
+<p>Select the <b>Registration</b> tab. By default FEAT will
+register the middle-timepoint FMRI image (saved as
+<code>example_func</code> in the <code>.feat</code> output directory)
+to the standard space template. We recommend in general turning on the
+<b>Main structural image</b> option so that the lowres FMRI image is first
+registered to a brain-extracted highres structural image from the same
+subject; this <code>highres</code> image is then registered to the standard
+space template, and then the two registrations are combined to give an
+<code>example_func2standard.mat</code> transform which can be used later to
+resample the FMRI stats into standard space.</p>
+
+
+<p>Set the <b>Main structural image</b> file
+to <code>structural_brain.nii.gz</code> with 7 DOF (note that we have already
+run BET on this, and in order to save time in this practical session we are
+not using the BBR method, but we <em>strongly</em> recommend that BBR is used
+generally).  Leave <b>Standard space</b> turned on
+with <code>MNI152_T1_2mm_brain.nii.gz</code> selected and set the DOF to
+12. Instead of the linear (12 DOF) registration we are using here, the more accurate nonlinear registration is
+normally recommended for registration to MNI space by selecting the
+&quot;nonlinear&quot; option, but we use linear here as it is faster for this
+  practical.</p>
+
+
+<hr/>
+<h3>Go!</h3>
+
+
+<p>You are now ready to run FEAT. Press <b>Go</b>. A web browser should
+appear, and as FEAT completes the different stages of processing, you will see
+messages appear in the <b>Log</b> section. Whether the web browser (and indeed
+the FEAT GUI) is left displayed or is closed, FEAT will continue to run in the
+background.  For now, leave the web browser open so that you can monitor
+FEAT's progress. FEAT will take 2-5 minutes to complete.
+</p>
+
+
+<hr/>
+<h3>While you wait</h3>
+
+
+<p>Take a look at the flow diagram below which summarises all of the steps that you just set up in Feat. Hopefully it will help you to see
+the big picture, and avoid getting bogged down in the details:</p>
+
+
+<div class="centred" style="width: 90%;">
+  <a href="first_level_flowchart.png" target="_blank">
+  <img src="first_level_flowchart.png"
+       alt="First level analysis flowchart"
+       width="100%"/>
+  </a>
+</div>
+
+
+<p>Whilst FEAT is running, run FSLeyes to have a quick look at the
+different images mentioned above: start by looking at
+<code>structural_brain.nii.gz</code>, and then view
+<code>fmri.nii.gz</code>. Note that when viewing the 4D image you can see the
+image time series as a movie by pressing on the movie icon
+(<img src="movie_icon.png" class="icon"/>), and you can also see time series
+plots by pressing <em>View &gt; Timeseries</em>.  </p>
+
+
+<h4>Create a mask to probe statistics</h4>
+
+
+<p>Whilst FEAT is still running, we will now use FSLeyes to create a
+mask in standard space that will be used later to find out about activation
+statistics from within the mask. An alternative method to create a mask was explained in the <a href="../registration/index.html#applying">Registration</a> practical. </p>
+
+<ol>
+  <li>Reopen FSLeyes and load the standard space template image
+    <code>$FSLDIR/data/standard/MNI152_T1_2mm</code> (<code>$FSLDIR</code> is
+    an environment variable indicating the directory in which FSL is
+    installed, you can type <code class="bash">echo $FSLDIR</code> to see what this is set
+    to).  Inside FSLeyes you can use the <em>File -&gt; Add standard</em> menu
+    option to find these standard space images quickly.
+  </li>
+
+  <li>Open the atlas panel via <em>Settings -&gt; Ortho View 1 -&gt; Atlas
+      panel</em>, and enable the <em>Harvard-Oxford cortical</em>,
+    <em>Harvard-Oxford subcortical</em> and <em>Juelich Histological</em>
+    atlases.  Move the cursor around a little in the standard brain and see
+    how the labels and numbers in the atlas tool window changes. If you have a
+    favourite part of the brain and you happen to know where it is you can
+    move the cursor there and see if the atlas tool agrees with you.
+  </li>
+
+  <li>Now select the <em>Atlas search</em> tab in the atlas panel, and choose
+    the <em>Juelich Histological Atlas</em> from the list on the left.  You
+    will now see a list of all the structures in that atlas on the right.
+  </li>
+
+  <li>Type <code>ba4</code> in the text box above the structure list to filter
+    the structures that are shown. Click the check boxes next to <b>GM Broca's
+    area BA44 L</b> and <b>GM Broca's area BA45 L</b>.
+  </li>
+
+  <li>You will notice that in the FSLeyes overlay list, two images have been
+    added with name corresponding to the regions you just selected.  If you
+    select one of those and then move the cursor around you will notice its
+    intensity values in changing between 0 and 100. These values reflect the
+    probability that a given voxel (cursor position) is indeed part of that
+    structure. </li>
+
+    <li> Press the save icon 
+    (<img src="floppy_disk_icon.png" class="icon"/>)
+    next to the image <b>juelich/prob/GM Broca's area BA44 L</b> in the overlay list and
+    save the image to a file called <code>BA44</code>. Repeat this process
+    for BA45.
+  </li>
+
+  <li><p>What we will do next is to create a mask which has the value 1 for each
+    voxel that has a 50% or greater chance of belonging to BA44 and/or BA45.
+    We do this by typing (in the terminal window):</p>
+
+    <pre class="bash">fslmaths BA44 -add BA45 -thr 50 -bin Broca</pre>
+
+    <p>The end result of this is a file named <code>Broca.nii.gz</code> that we
+    will later use as a mask to plot time-series of our results. If you want
+    to convince yourself that this file indeed contains what it should you can
+    type</p>
+
+    <pre class="bash">fsleyes -std Broca -cm red</pre>
+
+    <p>and have a look.</p>
+  </li>
+</ol>
+
+
+<h4>Look at the EV specification</h4>
+
+
+<p>Lastly, whilst FEAT is running take a look at the files that we used to
+specify our design, <em>i.e.</em> <code>word_generation.txt</code>
+and <code>word_shadowing.txt</code>. We do this by typing (still in the
+terminal window):</p>
+
+<pre class="bash">more word_generation.txt</pre>
+
+<p>The <code>more</code> command will show you the contents of the file (type
+<code>q</code> to quit if the terminal doesn't give you your prompt back).
+Once you've finished looking at <code>word_generation.txt</code>,
+run <code class="bash">more word_shadowing.txt</code> to look at the timing
+information for the word shadowing task.</p>
+
+<div class="quiz_question">
+
+  <span class="question">There are three columns in these files, what information does the first column contain?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>Start time of the event (in seconds)</label>
+    <span id="option1" class="answer correct">Correct! Start times are relative to the start of the scan. In event-related studies like this it is crucial to get the timings right (down to a second) so it is often a good idea to have the start of stimulus presentation to be triggered by the scanner.</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>Duration of the event (in seconds)</label>
+    <span id="option2" class="answer incorrect">Incorrect! Event durations are in the second column. For experiments with events shorter than ~3sec and where all events are of an identical duration one can just leave this column to be ones (as we have done for this study). It becomes important for example in studies where one has events that are started by a trigger and finished by a user response.</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>Magnitude of the expected response</label>
+    <span id="option3" class="answer incorrect">Incorrect! Magnitudes are in the third column. This column is often left as ones when the experimental design contains a series of "identical" events. An example of where it would be used is a LASER pain study where the subject rates the pain from each LASER prick and where that rating could be entered as the third column.</span><br/>
+  </form>
+</div>
+
+<p>While FEAT is running it will display <b>STILL RUNNING</b> in the main FEAT
+report page, which is replaced by <b>Finished at ...</b> when it is done. Once
+FEAT has finished, look carefully at the various sections of the web page
+report, including motion correction plots in the Pre-stats section, the
+colour-rendered activation images and timeseries plots in the Post-stats
+section, and the Registration results. Note that if you click on the
+activation images you get a table of cluster co-ordinates. </p>
+
+
+<!-- <hr /> -->
+<!-- <h3>Calculate the high-pass filter cutoff from the design</h3> -->
+<!-- <p> -->
+<!-- Using the command line utility <code>cutoffcalc</code> you can obtain -->
+<!-- estimates of a 'safe' high-pass filter cutoff value (in seconds) to be -->
+<!-- used in <code>FEAT</code>. -->
+<!-- </p> -->
+<!-- <p> Within the .feat directory your design matrix is saved as a simple text file 'design.mat'. You can create these and corresponding contrast matrices using either the <code>Feat</code> GUI or the <code>Glm</code> GUI. Either one will save the design matrices and statistical model options. In this case we will try the Glm GUI. Open this GUI (type <code>Glm</code>). In the <b>General Linear Model</b> window create a simple design matrix, e.g. a 30s on/off blocked design. In the <b>GLM Setup</b> window set the number of timepoints to 45. Now view the design (press <b>View design</b> in the <b>General Linear Model</b> window). -->
+<!-- </p> -->
+<!-- <p>Set <b>High pass filter cutoff (s)</b> to 0 in the <b>GLM Setup</b> window (to turn off the filter - but note that if the cutoff resets to 1.0 then just ignore this as it will still do no filtering).  Then save this GLM design to disk, calling it "newdesign". Run the <code>cutoffcalc</code> command on <code>newdesign.mat</code> with the following: -->
+<!-- </p> -->
+<!-- <pre>cutoffcalc -i newdesign.mat -t 0.9 --tr=3.0</pre> -->
+<!-- <p> The output is the High pass filter cutoff value (in seconds) that can be entered in the FEAT Data tab. Here we have set the TR explicitly to 3.0 seconds and the acceptable retained variance (of the filtered EV) to 90%. The retained variance value of 90% is rather lenient here due to the small number of timepoints, with values between 95% and 99% being used on more typical datasets. -->
+<!-- </p> -->
+<!-- <p>Note that if you are interested in the effect of the HPF (highpass filter) then you can go back and forth, changing the HPF cutoff value and inspecting the difference this makes on the design matrix using the <b>View design</b> button. -->
+<!-- </p> -->
+
+<!-- <hr><h3>Re-thresholding</h3> -->
+
+<!-- You can re-run thresholding on the FEAT run that you have just created -->
+<!-- very easily. <UL> -->
+
+<!-- <P><li>Start the <code>Feat</code> GUI. Change <b>Full analysis</b> to -->
+<!-- <b>Post-stats</b>. Select the <b>Data</b> tab and press <b>Select FEAT -->
+<!-- directory</b> and select <b>fmri.feat</b>. A standard warning should -->
+<!-- popup, informing you that the information in that FEAT directory will -->
+<!-- have been loaded into the GUI. Go to <b>Post-stats</b> and try a -->
+<!-- different thresholding option - maybe try voxel-based thresholding -->
+<!-- with the same P threshold as before (0.05). -->
+
+<!-- <P><li>Select the <b>Registration</b> tab and deselect all -->
+<!-- registrations so that none occur, as there is no need to repeat them. -->
+
+<!-- <P><li>Select the <b>Misc</b> tab and change <b>Overwrite original -->
+<!-- post-stats results</b> to <b>Copy original FEAT directory for new -->
+<!-- Post-stats/Registration</b>, as we want to be able to compare the new -->
+<!-- results to the old. -->
+
+<!-- <P><li>Then press <b>Go</b>. A new FEAT directory will -->
+<!-- get created (fmri+.feat); compare these results to the original -->
+<!-- run. -->
+
+<!-- <P><li>If you get time at the end of this session, try running a range -->
+<!-- of threshold types and settings to see their effect. You could also -->
+<!-- try changing the preprocessing options - for example, how much worse -->
+<!-- is the activation if you do not run motion correction?  </UL> -->
+
+
+<!--  <hr><h3>Pre-threshold masking</h3> -->
+
+
+
+<!--  Pre-threshold masking in Feat -->
+<!--  allows all stats -->
+<!--  images to be masked by a chosen mask BEFORE thresholding. There -->
+<!--  are two reasons why you might want to do this. The first is that you -->
+<!--  might want to constrain your search for activation to a particular -->
+<!--  area. The second is that in doing so, you are reducing the number of -->
+<!--  voxels tested and therefore will make any -->
+<!--  multiple-comparison-correction in the thresholding less stringent. -->
+
+<!--  <p> We will use the mask we created earlier using AFNI, to -->
+<!--  	    constrain our search for activation to a particular standard-space-based  area -->
+<!--  	    in the audio-visual dataset. -->
+<!--  <UL> -->
+
+<!--  <p><li>First transform the mask into the space of the lowres data -->
+<!--  using the standard2example_func.mat transform in the feat -->
+<!--  directory:<br> -->
+<!--  <code>flirt -in mask -ref fmri.feat/example_func -applyxfm -init -->
+<!--  fmri.feat/reg/standard2example_func.mat -out lowresmask -datatype -->
+<!--  float<br><br> -->
+
+<!--  fslmaths lowresmask -thr 0.1 -bin lowresmask -->
+<!--  </code> -->
+
+<!--  <P><li>Start the <code>Feat</code> GUI. Change <b>Full analysis</b> to <b>Post-stats</b>. Press <b>Select FEAT directory</b> and -->
+<!--  select <b>fmri.feat</b>.  -->
+
+<!--  <P><li>Go to <b>Post-stats</b> and select the <b>Pre-threshold -->
+<!--  		masking</b> file as the one you just created (lowresmask) -->
+
+<!--  <P><li>Select the <b>Registration</b> tab and deselect all -->
+<!--  		  registrations so that none occur, as there is no need -->
+<!--  		  to repeat them. -->
+
+<!--  <P><li>Select the <b>Misc</b> tab and change </b>Overwrite original -->
+<!--  		      post-stats results</b> to <b>Copy original FEAT -->
+<!--  			directory for new Post-stats/Registration</b>, -->
+<!--  		      as we want don't want to lose the original analysis. -->
+<!--  <P><li>Then press <b>Go</b>. Wait for Feat to -->
+<!--  finish and view the results. -->
+<!--  </UL> -->
+
+
+<hr/>
+<h2><a name="featquery">Featquery</a></h2>
+
+
+<p> Featquery allows you to calculate certain data statistics, either at a
+voxel of interest, or averaged over a region of interest using a mask. We will
+use the standard-space mask which we created earlier. Start
+up <code>Featquery</code> from the terminal:</p>
+
+
+<pre class="bash">
+Featquery &amp;
+</pre>
+
+<p>(or <code class="bash">Featquery_gui &amp;</code> if you are on a Mac).</p>
+
+
+<p>Select the <code>fmri.feat</code> directory created by your first analysis
+on the fmri-fluency dataset.</p>
+
+
+<p>Featquery automatically reads the FEAT directory and gives you the
+appropriate options as to which statistics you can choose to
+investigate.</p>
+
+<ol>
+
+<li>Select the following statistics for the contrast that looks at activation
+  for word-generation (<em>i.e.</em> the <b>[1 0]</b> contrast), the contrast
+  that looks at activation for word-shadowing (<em>i.e.</em>  the <b>[0 1]</b>
+  contrast) and the contrast that looks at activation for word-generation over
+  and above word-shadowing (<em>i.e.</em> the <b>[1 -1]</b>
+  contrast), <em>i.e.</em> contrasts number 1, 2 and 5:</p>
+
+  <ul>
+    <li><b>stats/cope</b> (unthresholded contrast of parameter estimate)</li>
+    <li><b>stats/tstat</b> (unthresholded t statistics)</li>
+    <li><b>stats/zstat</b> (unthresholded z statistics)</li>
+    <li><b>thresh_zstat</b> (thresholded z statistics)</li>
+  </ul>
+  <br/>
+
+<li>In the <b>Input ROI selection</b> panel, enter the mask that you created
+  earlier (<em>i.e.</em> <code>Broca.nii.gz</code>) as the <b>Mask Image</b>
+  (note - Featquery can take either a standard-space mask OR a lowres one in
+  the original dataspace OR a mask in the space of the structural image)</li>
+
+<li>In the <b>Output options</b> section, select the <b>Convert PE/COPE values
+  to &#37;</b> option</li>
+
+<li>Select the <b>Do not binarise mask (allow weighting)</b> option</li>
+
+<li>Select an atlas (inside the Output options section), for example
+  the <b>Harvard-Oxford Cortical Structural Atlas</b>. The local maxima voxels
+  reported by Featquery will be related to structures in the selected
+  atlas.</li>
+
+<li>Press <b>Go</b> and a web browser showing the estimated statistics should
+  popup shortly (possibly after a minute or two). </li>
+
+</ol>
+<p>The resulting web page will contain a table summarizing each of the statistics that you asked Featquery to report on in step 1. The first column gives the statistic name. The second column gives the number of non-zero voxels in the mask. The next group of columns gives a summary of the distribution of values within the mask. Finally, the last group of columns contains the position of the maximum in voxel space, in mm space, and in the atlas space selected in step 5. Plots of the timeseries at the maximum z-stats are available by clicking the link labeled "Masked time series plot" just below the image of the mask at the top of the page.</p>
+
+<div class="quiz_question">
+
+  <span class="question">What does the second column ("# voxels") tell you for the copes and t-stats images?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>The number of voxels with statistically significant activation</label>
+    <span id="option1" class="answer incorrect">Incorrect! Only the thres_zstat images have been thresholded to remove any spurious correlations, so only for these images does the number of non-zero voxels represent the extent of the statistically significant activation</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>The number of voxels with any activation, whether it reaches the statistical threshold or not</label>
+    <span id="option2" class="answer incorrect">Inorrect! No analysis can give you information about brain activation that is not statistically significant</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>The number of voxels in the Broca mask</label>
+    <span id="option3" class="answer correct">Correct! Even in voxels without any brain activation, there will be some correlation between the contrast timeseries and the image noise, leading to spurious non-zero copes and t-stats. Hence, all voxels within the Broca mask will be non-zero (except for voxels outside of the brain mask).</span><br/>
+  </form>
+</div>
+<hr/>
+<p class="centred">The End.</p>
+</div>
+</body>
+</html>

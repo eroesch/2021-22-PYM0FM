@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+
+<!-- Start of Practical boilerplate. -->
+<link rel="stylesheet" type="text/css" href="../../../fsl/fsl.css" />
+<link rel="stylesheet" type="text/css" href="../../../fsl/quiz.css">
+<link rel="stylesheet" type="text/css" href="../../../fsl/viz.css">
+
+<script type="text/javascript" src="../../../fsl/quiz.js"></script>
+<script type="text/javascript" src="../../../fsl/showhide.js"></script>
+<script type="text/javascript" src="../../../fsl/viz.js"></script>
+<script type="text/javascript">
+window.onload=function() {
+    setupQuizQuestions();
+    var graphs = document.querySelectorAll(".viz-graph");
+    var parser = new DOMParser;
+    for (var i = 0; i < graphs.length; i++){
+        var div = graphs[i];
+        var dom = parser.parseFromString(div.innerHTML, "text/html");
+        div.innerHTML = Viz(dom.body.textContent);
+        var svg = div.querySelector("svg");
+        svg.setAttribute("width",  "100%");
+    }
+}
+</script>
+<!-- End of Practical boilerplate. -->
+
+
+<title>ICA Practical</title>
+</head>
+<body>
+<div id="practical">
+<h1 class="centred">ICA and Dual Regression Practical</h1>
+
+<p><b>Independent Component Analysis (ICA)</b> is a tool that we can use to
+decompose FMRI data into spatially independent components, with each component
+represented by a spatial map and a time course. </p>
+
+<p>We can use ICA at the single subject level to separate out true neuronal
+signal from noise, and use ICA at the group level to identify whole brain resting
+state networks (RSNs) that are common across the group.</p>
+
+<p><b>Melodic</b> is the tool in <b>FSL</b> that we use at both the subject
+and group level to decompose FMRI data into time-courses and spatial maps
+using ICA.</p>
+
+<p><b>Dual regression</b> is a tool that we can use as part of a group-level resting state
+analysis to identify the subject-specific contributions to the group level ICA. The output of dual regression is a set of subject-specific
+spatial maps and time courses for each group level component (spatial map) that can be then compared across subjects/groups.
+</p>
+
+
+<h2>Contents:</h2>
+<dl class="contents">
+
+  <dt><a href="#single">Running single-subject ICA</a></dt>
+  <dd>Setting up and running ICA at the single-subject level.</dd>
+
+  <dt><a href="#cleaning">Classifying and removing noise components from single-subject ICA</a></dt>
+  <dd>Manual and automated classification of ICs as signal or noise.</dd>
+
+  <dt><a href="#register">Registering cleaned single-subject data to the standard space</a></dt>
+  <dd>Aligning clean data to a common space ready for group level analysis</dd>
+
+  <dt><a href="#gica">Running Group ICA</a></dt>
+  <dd>Setting up and running temporal concatenation group ICA.</dd>
+
+  <dt><a href="#dim">Low versus high dimensional group ICA</a></dt>
+  <dd>Looking at how the ICA dimensionality (number of components) affects
+  the results.</dd>
+  <dt><a href="#group">Using dual regression to investigate group differences</a></dt>
+  <dd>Estimating group level ICs, and comparing ICs across groups.</dd>
+
+</dl>
+
+<hr/>
+<h2><a name="single">Running single-subject ICA</a></h2>
+
+<h3> Preparing for the single-subject ICA</h3>
+
+<p> Just like with task-fMRI, before you can run single-subject resting-state analysis
+  you first need to prepare the necessary images:
+  <ul>
+  <li> Brain-extract the structural T1 image (e.g. with <code>BET</code>) to use for registration</li>
+  <li> Brain-extract the  magnitude fieldmap image (e.g. with <code>BET</code>)</li>
+<li> Convert the fieldmap phase image to units of rad/s (using <code>fsl_prepare_fieldmaps</code>).
+See the <a href="../registration/index.html"> Registration Practical </a> for further details.</p></li>
+</ul>
+
+<h3> Single-subject ICA via the MELODIC GUI</h3>
+
+<p>MELODIC has a simple GUI that has been structured to be similar to the FEAT GUI.
+  The MELODIC GUI will allow you to apply the necessary pre-processing and ICA options.</p>
+
+<div class="viz-graph">
+  digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="input image - raw resting 4D fmri"];
+  2 [label="alternative reference image - high contrast volume (if multi-band)"];
+  3 [label="fieldmaps - mag_brain and fmap_rads (if using)"];
+  4 [label="structural - brain extracted"];
+  5 [label="standard - MNI brain"];
+6 [label="melodic"];
+7 [label="report.html"];
+8 [label="/filtered_func_data.ica"];
+9 [label="filtered_func_data.nii.gz"];
+10 [label="..."];
+
+  1 -> 6;
+  2 -> 6;
+  3 -> 6;
+  4 -> 6;
+  5 -> 6;
+    6 -> 7;
+    6 -> 8;
+    6 -> 9;
+    6 -> 10;
+    }
+</div>
+<p></p>
+<p> Take a look at an example data directory:</p>
+
+<pre class="bash">
+cd ~/fsl_course_data/rest/ICA/single_subject/CON_417
+</pre>
+
+<p> To set up the preprocessing and single-subject ICA, you would load in the following images (just as for task fMRI):
+    <ul>
+      <li> Data - 4D data: Resting 4D functional image</li>
+      <li> Registration - Main structural image: Brain-extracted T1</li>
+      <li> Pre-stats - B0 unwarping: B0 fieldmap in rad/s (if using fieldmaps)</li>
+      <li> Pre-stats - B0 unwarping: B0 brain-extracted magnitude image (if using fieldmaps)</ls>
+      <li> Pre-stats - Alternative reference image: high-contrast alternative reference volume</ls></p>
+    </ul>
+
+<p> Can you identify the files listed above in the folder? Check your answer <span class="clickme" onclick="showIt('hint2')">here</span></p>
+
+<div id="hint2" class="answer" style="display: none">
+  <ul>
+      <li> Data - 4D data: CON_417_resting.nii.gz </li>
+      <li> Registration - Main structural image: CON_417_highres_brain.nii.gz </li>
+      <li> Pre-stats - B0 unwarping: fmap_rads.nii.gz </li>
+      <li> Pre-stats - B0 unwarping: fmap_mag_brain.nii.gz </ls>
+      <li> Pre-stats - Alternative reference image: CON_417_resting_contrastvol.nii.gz </ls></p>
+    </ul> </div>
+
+<p>Open the <code>Melodic</code> GUI (<code>Melodic_gui</code> from MacOS) to see the similarity to the <code>Feat</code> GUI. </p>
+
+<p> Click through the GUI and enter each of the images in the right place. Check with a tutor if you are not sure.</p>
+
+<p> The recommended <b>Pre-processing</b> and <b>Registration</b> choices for single-subject resting-state analysis
+  are largely the same as for task-fMRI, e.g. use <code>MCFLIRT</code> motion correction and <code> FNIRT</code>
+   for non-linear registration(<b>Note</b>: You can find the additional information in <code>B0_unwarping_info.txt</code>. Leave other options as default).
+   However, the following pre-processing choices should be considered when running
+  single-subject ICA:</p>
+  <ul>
+<li> <b>Spatial smoothing:</b> You may or may not wish to apply spatial smoothing before running ICA.
+  This decision is largely based on data quality - if you have a small voxel size, e.g. HCP-style data,
+  you may not want to apply smoothing to preserve spatial detail. Also, since the statistical analysis we will use is non-parametric, we don't need to apply spatial smoothing to increase gaussianity (and meet the assumptions required by Gaussian Random Field theory), like we did for task-fMRI.  </li>
+<li> <b>High-pass filtering:</b> Since we don't have a model of the signal we expect to see in the data, we only want to remove slow drifts. Also, resting state signal is low frequency, mostly between 0.01-0.1 Hz, so we want to remove frequencies only below 0.01 Hz (corresponding to a period of 100 s). </li>
+</ul>
+
+<h4>Running the ICA</h4>
+
+<div class="aside">You can also run the preprocessing and single-subject ICA via the <code>Feat</code> GUI by selecting <b>Preprocessing</b> from the top right drop-down list and selecting <b>MELODIC ICA data exploration</b> in the <b>Pre-stats</b> tab.
+  This will run single-subject ICA with automatic dimensionality estimation.
+  <p>Unlike for other FSL tools, the <code>melodic</code> command line is NOT equivalent to the GUI.The command line only performs ICA decomposition, while running MELODIC via the GUI will
+  call different preprocessing steps and then use the <code>melodic</code> (command line) tool to perform ICA decomposition.
+  Similarly, the FEAT GUI runs preprocessing and then can calls <code>melodic</code> command line to perform ICA decomposition. Also, note that the MELODIC GUI only allows you to change the basic options for ICA decomposition.</p></div>
+
+<p>To set the GUI to run a single-subject ICA, go to the <b>Stats</b> tab and select <b>Single-session ICA</b> from the dropdown list.
+  You can also choose whether to <b>Variance-normalise the timecourses</b> and whether to use <b>Automatic dimensionality
+    estimation</b>. Leave them both on as default. </p>
+
+<p> For single-subject ICA, the <b>Post-stats</b> tab can be left as default
+  (Post-stats options do not affect the output of single-subject ICA, only the rendering of images in the report.html).</p>
+
+<p> As the preprocessing and single-subject ICA would take too long to run in the practical today, just <b>Save</b> the settings in an .fsf file in the working directory. We have already run all the single-subject ICA on the data you will use for the rest of the practical. </p>
+
+<h3> Output of MELODIC single-subject ICA</h3>
+
+<p>We have run single-subject ICA via the FEAT GUI for you on a set of 12 subjects,
+  including six patients with a tumour (<code>~/fsl_course_data/rest/ICA/TUM_???</code>) and six healthy controls
+  (<code>~/fsl_course_data/rest/ICA/CON_???</code>). We are grateful to Natalie Voets for providing the datasets.</p>
+
+<p>Change directory to look at the content for one of these subjects
+  (e.g. <code>~/fsl_course_data/rest/ICA/CON_425/CON_425_resting.feat/</code>)</p>
+
+<p>Many of the output images will be familiar from task-fMRI analysis, e.g. <code>example_func.nii.gz</code>,
+  <code>design.fsf</code> and <code>report.html</code>.</p>
+
+<p> <b>Please note:</b> These single-subject data have already been 'cleaned'
+  (explained in the next section).
+  The <code>filtered_func_data_clean.nii.gz</code> and <code>labels.txt</code>
+  files are NOT automatically generated in the single-subject ICA.</p>
+
+<div class="aside">Due to the fact that melodic has to make an initial guess about ICA decomposition,
+    running melodic twice on the same data with the same settings can lead to small differences in the number and order of the estimated components.</div>
+
+<p>The output from single-subjet ICA is the <b>/filtered_func_data.ica</b> directory. Go into the <code>/filtered_func_data.ica</code> directory and look at the
+  contents.</p>
+
+<p>The key output in this directory is the <code>melodic_IC.nii.gz</code>, which is a 4D image where each volume
+  is a component generated in the single-subject ICA.</p>
+
+<hr/>
+<h2><a name="cleaning">Classifying and removing noise components from single-subject ICA</a></h2>
+
+<p>The primary purpose of running single-subject ICA is to clean the single-subject data,
+by identifying and removing components relating to artefacts (e.g. motion, physiological noise).
+Among the <code>filtered_func_data.ica/melodic_IC.nii.gz</code> components
+we want to identify those relating to noise and remove them from the pre-processed 4D resting fMRI data (<code>filtered_func_data.nii.gz</code>)
+to produce a 'clean' version of the preprocesed data
+  (<code>filtered_func_data_clean.nii.gz</code>). This process can be done
+  manually or using an automated method. In this section you will
+  learn how to do it in both ways.</p>
+
+<h3>Manual IC classification</h3>
+<p>In this part of the practical you are going to label ICA components as either signal or noise. </p>
+
+<p>To do this you need to look carefully at three pieces of
+information for each component: 1) the <b>spatial map</b>, 2) the <b>time course</b>,
+and 3) the <b>power spectrum</b> of the time course. Take a look at the example spatial maps,
+time courses and power spectra for 'good' (signal) and 'bad' (noise) shown in the Figure below (the spatial maps shown are all noise components).</p>
+
+<img src="Figure1_ica.png" alt="Figure 1" vspace="15">
+<img src="Figure2_ica.png" alt="Figure 2" vspace="15">
+
+<p>To get an understanding of the influence of data quality and quantity on
+the performance of ICA, you are going to take a look at two examples
+- one using multi-band data, one using non-multiband EPI data. We will
+  use FSLeyes in <em>Melodic mode</em> to simultaneously show the
+  spatial map, time course and power spectrum for each component.</p>
+
+<pre class="bash">
+cd  ~/fsl_course_data/rest/ICA/IC_classification
+</pre>
+
+<h4>Manual labelling of multi-band fMRI</h4>
+
+<p> In the first example, we have provided the components from a single-subject ICA run via the FEAT GUI on a 15-minute run of multiband data.
+  No smoothing was applied during preprocessing.</p>
+
+<p>First, load the <code> Rest_MB6.feat/design.fsf </code> in the FEAT GUI to see how
+  the single-subject preprocessing and ICA was run for this subject. </p>
+
+<p>Close the FEAT GUI and open the single-subject ICA output in <code>FSLeyes</code>:</p>
+
+<pre class="bash">
+fsleyes --scene melodic -ad Rest_MB6.feat/filtered_func_data.ica &
+</pre>
+
+<div class="aside">To load in the labels.txt file, make sure <em>melodic_IC</em> is selected in the overlay list.</div>
+
+<p> Load the <code>labels.txt</code> file from the <code>Rest_MB6.feat</code> directory
+  (it will show a message saying  the label file does not refer to the melodic directory,
+  which is because we renamed it - click on <b>Apply the labels to the current overlay</b>).
+  You will now see labels for all the components except for ten which are labeled as <b>Unknown</b>
+  (in yellow).</p>
+
+<p>Please have a look at the 10 <b>Unknown</b> components and label each one as either <b>Unclassified
+noise</b> or as <b>Signal</b> (note that FSLeyes allows you to include more informative labels if you wish).
+Once you have classified all of the components, please save your results by overwriting the <code>labels.txt</code> file and close FSLeyes.</p>
+
+
+<h4>Manual labelling of EPI fMRI</h4>
+
+<p> In the second example, we have provided the components from a single-subject ICA run via the MELODIC GUI
+  on an older EPI dataset that has fewer timepoints and bigger voxel size. Some smoothing has been performed
+  during preprocessing of this dataset.</p>
+
+<p>First, load the
+  <code> Rest_EPI.ica/design.fsf </code> in the MELODIC GUI to see how the single-subject
+  preprocessing and ICA was run for this subject. </p>
+
+<p>Close the MELODIC GUI and open the single-subject ICA output in <code>FSLeyes</code>:</p>
+
+<pre class="bash">
+fsleyes --scene melodic -ad Rest_EPI.ica/filtered_func_data.ica &
+</pre>
+
+<p> Load the <code>labels.txt</code> file (inside
+<code>Rest_EPI.ica</code>) in the same manner as
+before, and classify the 10 <b>Unknown</b> components. Again, save the results by
+overwriting <code>labels.txt</code> and close FSLeyes.</p>
+
+<h3>Removal of noise components with fsl_regfilt</h3>
+
+<p>You will now manually &quot;clean up&quot; the EPI data example by removing the components that you
+  classified as noise from your data. This is done using
+<code>fsl_regfilt</code>, which will regress the time courses of the noise components from the data.
+
+<div class="viz-graph">
+  digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="fsl_regfilt"];
+  2 [label="input image (-i Rest_EPI.ica/filtered_func_data.nii.gz)"];
+  3 [label="ICA timeseries (-d Rest_EPI.ica/filtered_func_data.ica/melodic_mix)"];
+  4 [label="list of noise component numbers (-f 1,2,3 ...)"];
+  5 [label="output filename (-o Rest_EPI.ica/filtered_func_data_clean.nii.gz)"];
+  2 -> 1;
+    3 -> 1;
+    4 -> 1;
+    1 -> 5;
+    }
+
+</div>
+
+</p>
+
+<div class="quiz_question">
+
+  <span class="question">The help information from <code>fsl_regfilt</code>
+  explains what the command does: &quot;Data de-noising by regressing out part
+  of a design matrix using simple OLS regression on 4D images&quot;. In our
+    case, what does the design matrix contain?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>The
+    task regressors</label>
+    <span id="option1" class="answer incorrect">Incorrect! Remember that this
+      is resting state data, so there are no task regressors!</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>The
+    timeseries from the components labeled as noise</label>
+    <span id="option2" class="answer correct">Correct! The timeseries from the
+    components that are labelled as noise will be regressed out of the
+    dataset.</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>EVs
+      with values for each subject (0 for healthy control and 1 for
+      patient)</label>
+    <span id="option3" class="answer incorrect">Incorrect! This is a
+      single-subject ICA analysis, so there are no subject labels at this
+      point.</span><br/>
+  </form>
+</div>
+
+<p>To manually remove the noise components from the Rest_EPI.ica data, first we need to get a list of IDs of the noise components:</p>
+
+<pre class="bash">
+tail -1 Rest_EPI.ica/labels.txt
+</pre>
+
+
+<p>Now we can pass this list of numbers to <code>fsl_regfilt</code> (<b>important:</b> in the
+command below, replace <code>1,2,3</code> with the output of the above
+command, making sure to remove the square brackets from the terminal output and include the quotes &#39;&#39; in the command):</p>
+
+
+<pre class="bash">
+fsl_regfilt -i Rest_EPI.ica/filtered_func_data.nii.gz \
+            -d Rest_EPI.ica/filtered_func_data.ica/melodic_mix \
+            -o Rest_EPI.ica/filtered_func_data_clean.nii.gz \
+            -f &quot;1,2,3&quot;
+</pre>
+
+<br/>
+<p>Make sure you understand what each of the command's flags do. If not sure, check the help and/or ask a tutor.</p>
+
+In FSLeyes, open the original pre-processed data
+(<code>Rest_EPI.ica/filtered_func_data.nii.gz</code>) and the cleaned
+pre-processed data
+(<code>Rest_EPI.ica/filtered_func_data_clean.nii.gz</code>) and look at them in movie mode. </p>
+
+
+<h3><a name="autocleaning"></a>Automatic IC classification and noise removal</h3>
+
+<p>To avoid manual labelling of all the components for every single subject,
+tools have been developed to try automatically identify components
+that represent structured noise in fMRI data. We will take a look at two of
+these tools:</p>
+
+<ul>
+  <li><a href="../../../../fsl/fslwiki/FIX.html" target="_blank"><b>FIX</b></a> is an
+    automated classification algorithm that uses hand-labelled training data
+    to train a multi-level classifier to reliably label signal and noise
+    components in comparable novel datasets. There are already different
+    trained classifiers available, which can be used in case your data is
+    comparable to the data FIX has been trained on (both in terms of sequence characteristics and of preprocessing applied).
+    For optimal results it is recommended to retrain the classifier on your data.
+
+<div class="aside">Note that AROMA requires slightly different preprocessing options to be run on the data. See user guide for details.</div>
+
+  <li><a href="https://github.com/rhr-pruim/ICA-AROMA" target="_blank"><b>AROMA</b></a> is an
+    alternative to FIX that specifically aims to identify motion artefacts.
+    It does not require classifier (re-) training across studies. It uses four
+    theoretically motivated spatial and temporal features embedded in a simple
+    and robust classifier, and has been shown to minimize the impact of motion
+    while improving resting-state network
+    reproducibility. If you are interested in more details, see the <a href="#optional"> optional section </a> at the end of the practical.
+  </li>
+</ul>
+
+<p></p>
+<p>Now you are going to compare your own classification of signal and noise
+components for the EPI data to classifications done by FIX.
+If you are interested in comparing also the output from AROMA, see the <a href="#optional"> optional section </a> at the end of the practical. </p>
+
+
+<h4>FIX classified components</h4>
+
+<p><code>FIX</code> has already been run on the Rest_EPI.ica data using the following command:</p>
+  <pre class="dontrun">fix Rest_EPI.ica training.RData 30 -m</pre>
+
+  <p> A key output of FIX is a .txt file that lists the classification of each component,
+    and provides a comma separated list of noise ICs at the bottom.
+    The name of the txt file is formatted as: <code> fix4melview_&#8249;training data&#8250;_thr&#8249;threshold&#8250;.txt</code></p>
+
+  <p>Use the <code>tail</code> command to get a list of the components that were classified as noise
+  by <code>FIX</code>, and compare them against your own results (what you passed
+  to <code>fsl_regfilt</code>, above).</p>
+
+
+<p>Click <span class="clickme"
+onclick="showIt('fix')">here</span> to check the command to list the FIX-classified noise components.
+<p>
+<div id="fix" class="answer" style="display: none">
+  <pre class="bash">
+  tail -n 1 Rest_EPI.ica/fix4melview_training_thr30.txt
+  </pre>
+</div>
+</p></p>
+
+
+<p>Note that FIX automatically regresses out the noise components and produce the 4D cleaned data as part of the output (see the relative user guides for details), therefore there is no need to apply <code>fsl_regfilt</code> separately.</p>
+
+
+<hr/>
+<h2><a name="register">Registering cleaned single-subject data to the standard space</a></h2>
+
+<div class="aside"> If you run group ICA via the MELODIC GUI, the GUI can apply the transformations/warps
+  to align the single subject data to the standard space.
+  <b><em>HOWEVER</em></b>, if you have applied cleaning at the single subject level (which is recommended!),
+  you currently cannot use the MELODIC GUI to run the group ICA, because the GUI would use the un-cleaned images. Instead, as you will see in the next practical, you need to run the group ICA from the <code>melodic</code> command line on data already registered in standard space. </div>
+
+<p> The clean preprocessed 4D resting state data produced by the steps above (<code>filtered_func_data_clean.nii.gz</code>)
+  is still in the native subject space. In fact, the MELODIC/FEAT <b>Registration</b> settings at the single-subject level
+  only <em>generate</em> the transformations/warps necessary to align the functional data to the standard space without <em>applying</em> them.
+  Therefore, before moving on to the group analysis, the cleaned single-subject data needs to be aligned
+  to the standard space by applying the transformations/warps. </p>
+
+Let's go back to our tumour patients (<code>TUM_*</code>) and controls (<code>CON_*</code>) inside <code>~/fsl_course_data/rest/ICA/</code> and align the <code> filtered_func_data_clean.nii.gz </code> to the standard space,
+  using the <code>applywarp</code> command:</p>
+
+<div class="viz-graph">
+  digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="applywarp"];
+  2 [label="input image
+(-i filtered_func_data_clean.nii.gz)"];
+  3 [label="reference image
+(-r reg/standard.nii.gz)"];
+  4 [label="transformation matix
+(--premat=reg/example_func2highres.mat)"];
+  5 [label="output filename
+(-o filtered_func_data_clean_standard)"];
+  6 [label="FNIRT warp image
+(-w reg/highres2standard_warp.nii.gz)"];
+  2 -> 1;
+    3 -> 1;
+    4 -> 1;
+    6 -> 1;
+    1 -> 5;
+    }
+</div>
+
+<p>Type <code>applywarp</code> to see the usage and work out how to run the
+registration of the cleaned data to standard space for subject CON_417 using the
+transformations/warps generated when running the single-subject
+MELODIC. Don&#39;t actually run <code>applywarp</code>, but instead check your
+answer by clicking <span class="clickme"
+onclick="showIt('hint7')">here</span></p>
+        <div id="hint7" class="answer" style="display: none">
+<pre class="dontrun">cd ~/fsl_course_data/rest/ICA/CON_417/CON_417_resting.feat
+applywarp -r reg/standard.nii.gz \
+	    -i filtered_func_data_clean.nii.gz \
+	    -o filtered_func_data_clean_standard.nii.gz \
+	    --premat=reg/example_func2highres.mat \
+            -w reg/highres2standard_warp.nii.gz      </pre></div>
+
+
+<p> To save us manually registering each of our tumour patients and controls we can use a simple script that processes all subjects simultaneously.
+  For more details see the <a href="#scripting">optional section </a> at the end of this practical.</p>
+
+<hr/>
+<h2><a name="gica">Running Group ICA</a></h2>
+
+
+<div class="viz-graph">
+  digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="text file listing input filenames
+(-i input_files.txt) type cat input_files.txt to take a look"];
+  2 [label="output directory name
+(-o groupICA15)"];
+  3 [label="repetition time (TR)
+(--tr=0.72)"];
+  4 [label="approach, here temporal concatenation
+(-a concat)"];
+  5 [label="generate web report
+(--report)"];
+  6 [label="output everything
+(-Oall)"];
+  7 [label="ICA decomposition dimensionality
+(-d 15)"];
+  8 [label="melodic"];
+  9 [label="other options"];
+  1 -> 8;
+  8 -> 2;
+  3 -> 8;
+  4 -> 8;
+  8 -> 5;
+  8 -> 6;
+  9 -> 8;
+  }
+</div>
+
+<p> If you have applied cleaning at the single subject level (which is recommended!),
+you currently cannot use the MELODIC GUI to run the group ICA, because the GUI would use the un-cleaned images.
+Therefore, we need to use the <code>melodic</code> command line to run group ICA. </p>
+
+<div class="aside">The ${FSLDIR} part of this command finds the location where FSL is installed on your computer,
+  so you can type ${FSLDIR}/data/standard/MNI152_T1_2mm instead of
+   e.g. /usr/local/fsl/data/standard/MNI152_T1_2mm - this is particularly useful if you are not sure where FSL is installed.</div>
+
+<p> An example group ICA has been run before you using the following command (don't run this - it takes too long for this practical): </p>
+
+<pre class="dontrun">
+melodic -i input_files.txt -o groupICA15 \
+  --tr=0.72 --nobet -a concat \
+  -m $FSLDIR/data/standard/MNI152_T1_2mm_brain_mask.nii.gz \
+  --report --Oall -d 15
+</pre>
+</p>
+
+<p>Type <code> melodic </code> into the terminal
+  and use the command usage to work out what each flag in the command above means.
+  How many group components will be generated in this analysis? Check your answer <span class="clickme" onclick="showIt('hintd')">here</span></p>
+
+<div id="hintd" class="answer" style="display: none">15
+   </div>
+
+<div class="quiz_question">
+  <span class="question">If you wanted to extract 200 components, which part
+    of the command would you change?</span><br/>
+
+  <form>
+
+    <input id="option1" class="option" type="radio"
+    name="answer"/><label>change <code>-d 15</code> to <code>-d
+    200</code></label>
+    <span id="option1" class="answer correct">Correct!  The <code>-d</code>
+    flag controls the dimensionality of the decomposition</span><br/>
+
+    <input id="option2" class="option" type="radio"
+    name="answer"/><label>change <code>-o groupICA15</code> to <code>-o
+    groupICA200</code></label>
+    <span id="option2" class="answer
+    incorrect">Incorrect! This just controls the name of the output directory,
+    it does not have any influence on the dimensionality. For this you need to
+      change the <code>-d</code> flag.</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>It
+    is not possible to change the dimensionality from the command line, you
+    would need to use the GUI</label>
+    <span id="option3" class="answer incorrect">Incorrect! Command line
+    versions always have at least the same number of options that are
+    available in the GUI (and often more options). To change the
+    dimensionality, use the <code>-d</code> flag.</span><br/>
+  </form>
+</div>
+
+<h3> Output of group ICA</h3>
+
+<p> Change directory to <code>~/fsl_course_data/rest/ICA/groupICA15/</code> to look
+  at the output of the group MELODIC run with the command above. </p>
+
+<p>The key output from the group MELODIC is the <em> <code> melodic_IC.nii.gz</code></em>.
+  This is a 4D image where each volume corresponds to an ICA component.
+  This melodic_IC.nii.gz can be used as a group level template (spatial basis) to feed into dual regression (more on this later).</p>
+
+
+<hr/>
+<h2><a name="dim">Low versus high dimensional group ICA</a></h2>
+
+<p>In this section, you will have a look at the melodic_IC components from example group ICAs run with low and high dimensionality.</p>
+
+<p>Change directory into <code> ~/fsl_course_data/rest/ICA/low_high_ICA_dim </code></p>
+
+<p>We have run group ICA with 25 dimensions and with 50 dimensions for you, using the following commands:
+
+<pre class="dontrun">
+melodic -i input_files.txt -o GroupICA_25_s0_n820_MB8_HCP \
+  --tr=0.72 --nobet -a concat \
+  -m $FSLDIR/data/standard/MNI152_T1_2mm_brain_mask.nii.gz \
+  --report --Oall -d 25 </pre>
+
+  <pre class="dontrun">
+  melodic -i input_files.txt -o GroupICA_50_s0_n820_MB8_HCP \
+    --tr=0.72 --nobet -a concat \
+    -m $FSLDIR/data/standard/MNI152_T1_2mm_brain_mask.nii.gz \
+    --report --Oall -d 50 </pre>
+
+<p>You can compare the group ICA maps calculated with different dimensionalities (25 vs 50) by loading them in FSLeyes:</p>
+
+<pre class="bash">
+fsleyes -std \
+  melodic_IC_25_s0_n820_MB8_HCP.nii.gz -un -dr 30 100 -n 25 \
+  -cm red-yellow -nc blue-lightblue \
+  melodic_IC_50_s0_n820_MB8_HCP.nii.gz -un -dr 30 100 -n 50 \
+  -cm red-yellow -nc blue-lightblue &
+</pre>
+
+<p>Make sure that the two images are <em>unlinked</em> (that the
+<img src="chainlink_icon.png" class="icon"/> buttons next to each image's name
+is toggled off). </p>
+
+<p>Now go to the &lsquo;View&rsquo; menu at the top and add a
+second ortho view, so we can look at the <em>25</em> and <em>50</em> images
+side-by-side.  Next, make sure that the window on the left is showing
+the <em>25</em> results (by clicking the <img src="eye_icon.png"
+class="icon"/> toggle button next to 50), and make sure that the window on the
+right is showing the 50 results (by clicking the <img src="eye_icon.png"
+class="icon"/> toggle button next to 25).</p>
+
+<p>In the left view, select the <em>25</em> image, and change the volume
+control to 5. Then in the right view, select the <em>50</em> image, and look
+at volumes 32, 33 and 35. Make sure to navigate to somewhere inside the
+component (for example around voxel location 45 45 65). As you can see, the
+original network in the 25 dimensional ICA shown on the left of your screen is
+split into three separate components at a dimensionality of 50, namely a left
+and right lateralised and a medial region.  Another example is to compare
+component 2 in the 25-dimensional decomposition to components 5, 9, 11 and 14
+  in the 50-dimensional decomposition.</p>
+
+<hr/>
+<h2><a name="group">Using Dual Regression to investigate
+    group differences</a></h2>
+
+<p>A dual regression analysis is used to map the RSNs (i.e. group-level components or an external template or set of ROIs) back into
+individual subjects data, e.g. in order to examine between-group difference
+in the RSNs. We will use the group ICA generated from <code>melodic</code> in the section <a href="#gica">Running Group ICA</a> as spatial basis to input into dual regression. </p>
+
+<p>Dual regression works in three stages, each with its own output:</p>
+
+<ul>
+  <li><b>Stage 1</b> - using group-ICA spatial maps, subject-specific time courses are estimated
+    from the input standard space cleaned single-subject data (filtered_func_data_clean_standard.nii.gz); this step conducts a
+    multivariate spatial regression</li>
+
+  <li><b>Stage 2</b> - using the subject-specific time courses output from stage 1, subject-specific spatial maps are estimated
+    from the input standard space cleaned single-subject data (filtered_func_data_clean_standard.nii.gz); this step conducts a
+    multivariate temporal regression</li>
+
+  <li><b>Stage 3</b> - using the subject-specific spatial maps estimated in stage 2 and the design matrix and contrast files,
+    cross-subject (group) analysis is performed </li>
+</ul>
+<p></p>
+<div class="viz-graph">
+  digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="group-level ICA maps
+(groupICA15/melodic_IC)"];
+  2 [label="variance normalisation
+(1) i.e. on"];
+  3 [label="EVs of group-level design matrix
+(design/unpaired_ttest.mat)"];
+  4 [label="contrasts of group-level design matrix
+(design/unpaired_ttest.con)"];
+  5 [label="number of permutations for randomise
+(e.g. 5000)"];
+  6 [label="output directory name
+(groupICA15.dr)"];
+  7 [label="text file listing input filenames
+(`cat input_files.txt`) note use of back quotes"];
+  8 [label="dual_regression"];
+  9 [label="output: stage1"];
+  10 [label="timecourses fed back into dual regression to estimate stage 2"];
+  11 [label="timecourses can also be fed into FSLnets analysis (next practical)"];
+  12 [label="output: stage2"];
+  13 [label="spatial maps fed into randomise for group analysis"];
+  14 [label="output: stage3"];
+  15 [label="statistical maps for visualisation and interpretaion of results"];
+  1 -> 8;
+  2 -> 8;
+  3 -> 8;
+  4 -> 8;
+  5 -> 8;
+  7 -> 8;
+  8 -> 6;
+  6 -> 9;
+  6 -> 12;
+  6 -> 14;
+  9 -> 10;
+  9 -> 11;
+  12 -> 13;
+  14 -> 15;
+  }
+</div>
+
+<h3> Before running dual regression </h3>
+
+<p> Before we can run dual regression, we need to have:
+  <ul>
+    <li> A list of single subject cleaned, preprocessed, 4D rfMRI data in standard space</li>
+      <li> A set of RSNs that we want to estimate at the subject level</li>
+      <li> A group level design to perform the required group comparisons </li>  </ul>
+
+
+<div class="aside"> NB: the input list for dual regression is the same as that used for input to group MELODIC.</div>
+
+<p>In the <code>~/fsl_course_data/rest/ICA/</code> directory, we have already created the <code>inputlist_new.txt</code> containing
+the filepaths to each of our 6 controls and 6 tumour patients <code>filtered_func_data_clean_standard.nii.gz</code>.</p>
+
+<p>We also have our group level components (<code>~/fsl_course_data/rest/ICA/groupICA15/melodic_IC.nii.gz</code>) obtained in the section <a href="#gica">Running Group ICA</a></p>
+
+<p> We just need to set up the group-level design to perform group comparisons.
+  In this analysis, we want to compare resting-state connectivity between our six patients with a tumour
+and the six healthy controls using an unpaired t-test. </p>
+
+<p>Use the <code>Glm</code> GUI to set up a group-level design with <em> 4 contrasts</em> to model the mean for controls,
+  the mean for patients, as well as con > pat and pat > con. The input directories containing the cleaned and registered
+  single-subject data are labelled CON_* for control subjects and TUM_* for patients
+  (take this naming into consideration when setting up your design).</p>
+<p>Click <span class="clickme"
+   onclick="showIt('design')">here</span> to check you have set up your design correctly, then save it.</p>
+
+   <div id="design" class="answer" style="display: none">
+     <pre class="bash">
+       <img src="Figure1.png" alt="Figure 1" vspace="5" width="300px">
+       <img src="Figure2.png" alt="Figure 2" vspace="5" width="300px">
+     </pre>
+   </div>
+
+
+<h3> Running dual regression </h3>
+
+<p>Type <code>dual_regression</code> into the terminal to see details of the command usage. Using the data prepared above (subject files' list, <code>groupICA15/melodic_IC</code> group ICA maps and design files), work out the command we used to run this dual regression. Click <span class="clickme"
+   onclick="showIt('command')">here</span> to check the command you have come up with is correct. </p>
+
+   <div id="command" class="answer" style="display: none">
+     <pre class="dontrun">
+     dual_regression groupICA15/melodic_IC 1 \
+       design/unpaired_ttest.mat design/unpaired_ttest.con 5000 \
+       groupICA15.dr `cat inputlist_new.txt`
+     </pre>
+   </div>
+<p></p>
+
+
+<p>As the dual regression analysis is too long to run in the practical session, we have already ran the dual regression
+  analysis for you.
+  The output is located in <code> ~/fsl_course_data/rest/ICA/groupICA15.dr </code></p>
+
+<h3> Output of dual regression </h3>
+
+<p> Move back into the <code>~/fsl_course_data/rest/ICA</code> directory.</p>
+
+<p> Type <tt>ls groupICA15.dr</tt> into the terminal to view the output of the dual regression. </p>
+
+<h3> Viewing the results of dual regression </h3>
+
+<p>To view the results from the dual regression analysis, type the following into the terminal:</p>
+
+<pre class="bash">
+fsleyes -std groupICA15/melodic_IC \
+  -un -cm red-yellow -nc blue-lightblue -dr 4 15 \
+  groupICA15.dr/dr_stage3_ic0007_tfce_corrp_tstat3.nii.gz \
+  -cm green -dr 0.95 1 &
+</pre>
+
+
+<p>Make sure you are viewing the <code>dr_stage3_*</code> statistical map over the appropriate volume
+of <code>melodic_IC</code> - set the volume of the <code>melodic_IC</code>
+image to the same number of the IC shown in the randomise statistical image loaded (e.g dr_stage3_ic?????). </p>
+
+<p> The difference between the two groups is very small (because we only had 12 subjects and therefore
+not much statistical power). To find the result, go to voxel location [63, 81,
+54]. You may want to change the minimum threshold at the top to 0.9 to show the
+results at a slightly more lenient p-value. </p>
+
+
+<p>What is the name of the file that I would need to
+look at if I were interested in contrast 2 for network 12? Check your answer <span class="clickme" onclick="showIt('hint3')">here</span></p>
+
+<div id="hint3" class="answer" style="display: none">
+dr_stage3_ic0012_tfce_corrp_tstat2.nii.gz
+   </div>
+
+<p></p>
+
+<div class="quiz_question">
+  <span class="question">When you were looking at the dual regression results,
+  the minimum threshold of the <code>tfce_corrp_tstat3</code> image that was
+  loaded was set to either 0.95 or 0.9. What do these values mean?</span><br/>
+
+  <form>
+
+    <input id="option1" class="option" type="radio" name="answer"/><label>They are
+      z-statistics</label>
+    <span id="option1" class="answer incorrect">Incorrect!  As the name of the
+    file suggests, you are looking at a <code>corrp</code> image (i.e. the
+    values are p-values that have been corrected for multiple comparisons).
+    The p-values are shown as 1 minus the p-value to help make it easier to
+    visualise. Therefore a threshold of 0.95 means that you are looking at
+    results p&lt;0.05 corrected, and a threshold of 0.9 shows results p&lt;0.1
+    corrected.</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>They
+    are p-values, so the image is showing all voxels with a p-value lower than
+    0.95</label>
+    <span id="option2" class="answer incorrect">Incorrect! These images
+    contain 1 minus the p-value to help make it easier to visualise. Therefore
+    a threshold of 0.95 means that you are looking at results p&lt;0.05
+    corrected, and a threshold of 0.9 shows results p&lt;0.1
+    corrected.</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>The
+    values are 1 minus the p-value, so a threshold of 0.95 means the image is
+    showing all voxels with a p-value lower than 0.05</label>
+    <span id="option3" class="answer correct">Correct! To make it easier to
+    visualise, the results are saved as 1 minus the p-value. Note that you are
+    looking at the <code>corrp</code> image, so these p-values have been
+    corrected for multiple comparisons.</span><br/>
+  </form>
+</div>
+
+<p></p>
+
+
+<p>A quick script that is useful for checking the maximum of every
+1-p-value image across a set of dual regression stage 3 outputs is below. You
+can try to run it on the dual regression output we provided you with
+in <code>groupICA15.dr</code>. If the maximum value in any given image is not
+above 0.95, you know that nothing survived thresholding:</p>
+
+
+<pre class="bash">
+cd groupICA15.dr
+for i in dr_stage3_ic00??_tfce_corrp_tstat?.nii.gz ; do
+    echo $i `fslstats $i -R`;
+done
+</pre>
+
+<p>You can also run randomise as a separate stage from dual regression.
+  If you are interested in more details, see the <a href="#dr_optional"> optional section </a> at the end of the practical. </p>
+<hr/>
+
+<p class="centred">The End.</p>
+<hr/>
+
+<h3><a name="optional">(Optional) AROMA classified components</a></h3>
+
+<p><code>AROMA</code> has also already been run on the Rest_EPI.ica data using the following command:</p>
+  <pre class="dontrun">
+python2.7 ICA_AROMA.py \
+-in filtered_func_data.nii.gz \
+-out AROMA \
+-mc mc/prefiltered_func_data_mcf.par \
+-affmat reg/example_func2highres.mat \
+-warp reg/highres2standard_warp.nii.gz \
+-md filtered_func_data.ica
+</pre>
+
+<div class="aside">If the single-subject ICA directory is not specified (with the -md or -meldir flag), AROMA will run ICA decomposition as well. See user guide for details.</div>
+
+<p> The output of AROMA is in a directory <code>/AROMA</code>, and the identified noise components are listed in a text file <code>classified_motion_ICs.txt</code></p>
+
+  <p>Use the <code>cat</code> command to get a list of the components that were classified as noise
+  by <code>AROMA</code>, and compare them against your own results (what you passed
+  to <code>fsl_regfilt</code>).</p>
+
+
+<p>Click <span class="clickme"
+onclick="showIt('aroma')">here</span> to check the command to list the AROMA-classified noise components.
+<p>
+<div id="aroma" class="answer" style="display: none">
+  <pre class="bash">
+  cat Rest_EPI.ica/AROMA/classified_motion_ICs.txt
+  </pre>
+
+</div>
+</p></p>
+
+<p>Note that AROMA automatically regresses out the noise components and produce the 4D cleaned data as part of the output (see the relative user guides for details), therefore there is no need to apply <code>fsl_regfilt</code> separately.</p>
+<a href="#autocleaning">Back to main practical</a>
+
+<hr/>
+<h3><a name="scripting">(Optional) Scripting</a></h3>
+<p> To save us manually registering each of our tumour patients and controls, we can run the following simple script from <code>~/fsl_course_data/rest/ICA/</code> to process all subjects simultaneously.
+
+<pre class="dontrun">
+#!/bin/sh
+for j in `ls -d */*_resting.feat` ; do
+    applywarp -r ${j}/reg/standard.nii.gz \
+              -i ${j}/filtered_func_data_clean.nii.gz \
+              -o ${j}/filtered_func_data_clean_standard.nii.gz \
+              --premat=${j}/reg/example_func2highres.mat \
+	      -w ${j}/reg/highres2standard_warp.nii.gz
+done
+ls -1 */*_resting.feat/filtered_func_data_clean_standard.nii.gz >> inputlist_new.txt
+</pre>
+
+
+<p> The output of this script will be a standard space clean preprocessed 4D resting image for each subject (<code>filtered_func_data_clean_standard.nii.gz</code>)
+  as well as a txt file (<code>inputlist_new.txt</code>), which contains a list of the filepaths to the <code>filtered_func_data_clean_standard.nii.gz</code> for each subject.
+  This list is necessary for running the group ICA and the dual regression, which will be covered in the next practical. </p>
+
+<p></p>
+
+<p>The registration script above is also saved in the <code>~/fsl_course_data/rest/ICA/optional_script.sh </code>
+directory. You can run it by typing (don't do this now, it takes around 20 mins to run):
+
+ <pre class="dontrun">sh ./optional_script.sh</pre>
+</p>
+
+<a href="#register">Back to main practical</a>
+
+<hr/>
+<h3><a name="dr_optional">(Optional) Running dual regression and randomise separately</a></h3>
+
+<p>The standard <code>dual_regression</code> command automatically runs <code>randomise</code> to perform between-group statistical comparisons for *every* component
+  that is input to dual regression, *when provided with a design*. However, you can also run stage 1 and 2 of dual regression only and
+  separately run <code>randomise</code> after dual regression has finished.</p>
+<p>You may want to do this if you need to run a different test on the same data (avoiding re-calculating the single-subject maps), have more controls over randomise options,
+or if you are interested in running the statistical analysis only on one or a subset of RSNs (avoiding running tests on all the components).</p>
+
+<p>Type <code>dual_regression</code> into the command line to recap the usage and work out how would you change the command you used above to run only stage 1 and stage 2 of dual regression.</p> Check your answer <span class="clickme"
+   onclick="showIt('hint4')">here</span></p>
+
+ <div id="hint4" class="answer" style="display: none">
+     <pre class="dontrun">dual_regression groupICA15/melodic_IC 1 -1 0
+       groupICA15.dr `cat inputlist_new.txt`</pre>
+   </div>
+
+<p></p>
+<a href="#group">Back to main practical</a>
+
+<hr/>
+
+</div>
+</body>
+</html>

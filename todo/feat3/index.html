@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+
+<!-- Start of Practical boilerplate. -->
+<link rel="stylesheet" type="text/css" href="../../../fsl/fsl.css" />
+<link rel="stylesheet" type="text/css" href="../../../fsl/quiz.css">
+<link rel="stylesheet" type="text/css" href="../../../fsl/viz.css">
+
+<script type="text/javascript" src="../../../fsl/quiz.js"></script>
+<script type="text/javascript" src="../../../fsl/showhide.js"></script>
+<script type="text/javascript" src="../../../fsl/viz.js"></script>
+<script type="text/javascript">
+window.onload=function() {
+    setupQuizQuestions();
+    var graphs = document.querySelectorAll(".viz-graph");
+    var parser = new DOMParser;
+    for (var i = 0; i < graphs.length; i++){
+        var div = graphs[i];
+        var dom = parser.parseFromString(div.innerHTML, "text/html");
+        div.innerHTML = Viz(dom.body.textContent);
+        var svg = div.querySelector("svg");
+        svg.setAttribute("width",  "100%");
+    }
+}
+</script>
+<!-- End of Practical boilerplate. -->
+
+<title>FEAT 3 Practical</title>
+</head>
+
+
+<body>
+<div id="practical">
+<h1 class="centred">FEAT 3 Practical</h1>
+
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
+
+
+<p>
+This is the third FEAT practical. It leads you through some of
+the more advanced usage and concepts in both single-session and higher-level
+FEAT analyses. Feel free to do the latter three sections in a different order
+if you are particularly interested in any of them.
+</p>
+
+
+<h2>Contents:</h2>
+
+
+<dl class="contents">
+  <dt> <a href="#motion">Motion &amp; Physiological Noise Correction</a></dt>
+  <dd> Look at the ways in which we can do these corrections within FEAT.
+  </dd>
+
+  <dt> <a href="#parametric">Contrasts in Parametric Designs</a></dt>
+  <dd> Analyse a simulated dataset to look for linear and quadratic trends.
+  </dd>
+
+  <dt> <a href="#interactions">Interactions</a></dt>
+  <dd> Analyse an experiment containing multiple conditions to look for
+    interactions between the stimulus types.
+  </dd>
+
+  <dt> <a href="#contrastmasking">Contrast Masking</a></dt>
+  <dd> Use contrast masking to distinguish between results (in a
+    differential contrast) driven by positive or
+    negative BOLD changes.
+  </dd>
+
+</dl>
+
+
+<h2>Optional extensions</h2>
+
+
+<p>There is far more to FEAT than we have time to cover here! There are a few
+more sections in the
+<a href="../feat_extras/index.html" target="_blank">&quot;Extras&quot; practical</a>,
+but we do not expect you to do these! However, if you think that any of the
+concepts outlined below are likely to be more relevant to you than what is in
+this practical, then feel free to substitute sections.</p>
+
+
+<dl class="contents">
+  <dt> <a href="../feat_extras/index.html#custom" target="_blank">Custom
+  Waveforms</a></dt>
+  <dd> An example of the options for setting up first-level FEAT analyses with
+    simple designs that do not require timing files.</dd>
+
+  <!--dt> <a href="../feat_extras/index.html#outlierinf" target="_blank">Outlier
+  Inference</a></dt>
+  <dd> Become familiar with the outlier information provided by FLAME's group
+       analysis.
+  </dd-->
+
+  <dt><a href="../feat_extras/index.html#basisfunctions" target="_blank">HRF Basis
+  Functions</a></dt>
+  <dd> Create and use basis functions to model more general / flexible HRF
+  shapes.</dd>
+</dl>
+
+
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
+<hr/>
+<h2><a name="motion">Motion &amp; Physiological Noise Correction</a></h2>
+
+
+<p>
+In this section, we look at the ways we can correct for structured noise
+within FEAT. By adding specific regressors to the GLM we can mitigate the
+effects of motion to some extent, and we can pursue a similar strategy using
+PNM to correct for physiological noise&mdash;provided physiological recordings
+were acquired during the scan!
+</p>
+
+
+<p>
+To demonstrate this we acquired two data sets: two repetitions of the pyramids
+&amp; palm trees task (as seen in the FEAT 2 practical) in the same
+subject, but where in one scan the subject deliberately moved and breathed
+irregularly. These are referred to as the <em>naughty</em> and <em>nice</em>
+data from here on in.
+</p>
+
+
+<p>
+Another, complementary, approach to addressing excessive motion is to use
+ICA-based clean-up strategies. These are introduced in the ICA portion of the
+FSL course.
+</p>
+
+<!-- ++++++++++ -->
+
+
+<h3>Data</h3>
+
+
+<p>
+Take a moment to re-familiarise yourself with the key contrasts and typical
+responses under normal conditions, and satisfy yourself that the subject was
+still for the duration of the <em>nice</em> scan. Then look at the data
+contaminated by motion&mdash;the differences should be obvious!
+</p>
+
+
+<pre class="bash">
+cd ~/fsl_course_data/fmri3/motion/
+firefox nice.feat/report.html &amp;
+firefox naughty.feat/report.html &amp;
+</pre>
+
+
+<!-- ++++++++++ -->
+
+<h3>Simple motion correction</h3>
+
+
+<p>
+The simplest form of motion correction we can apply is to add the estimated
+motion traces from MCFLIRT to the GLM as nuisance regressors. That ensures
+that any of the BOLD signal that correlates with the temporal dynamics of the
+motion can be treated as noise. To do this, we simply select <b>Standard
+Motion Parameters</b> from the drop-down menu in the <b>Stats</b> tab in FEAT.
+Take a look at how this changes the results below:
+</p>
+
+
+<pre class="bash">
+firefox naughty_motion.feat/report_poststats.html &amp;
+</pre>
+
+
+<!-- ++++++++++ -->
+
+
+<h3>Physiological noise correction</h3>
+
+
+<p>
+We are now going to use PNM to generate a set of EVs that relate to the
+physiological recordings we collected during the scans.
+</p>
+
+
+<ul class="pad-after">
+
+  <li>Open PNM: <code class="bash">Pnm &amp;</code></li>
+
+  <li>Select <code>pnm/naughty_recordings.txt</code> as the <b>Input Physiological Recordings</b> and the
+  4D data (<code>naughty.nii.gz</code>) as the <b>Input TimeSeries</b>. </li>
+
+  <li>We need to set some extra information about the recordings too. Make sure
+  the <b>Column numbers</b> are: 4&minus;cardiac; 2&minus;respiratory;
+  and 3&minus;scanner triggers. Then set <b>Sampling Rate</b> to 100 Hz and <b>TR</b> to
+  0.933 s.</li>
+
+  <li>As this is multiband data, we need to explicitly provide slice timings, but for
+  conventional sequences it is normally possible to use one of the
+  defaults. Set <b>Slice Order</b> to <b>User Specified</b> and select
+  <code>pnm/slice_timings.txt</code>. Note that if you are doing this using
+  the pop up window, you will need to delete <code>IMAGE</code> in the <b>Filter</b>
+  box at the top to display the text file.</li>
+
+  <li>Set the output basename to <code>pnm/mypnm</code>. Under EVs, select <b>RVT</b>
+  and then press <b>Go</b>! Once this has printed <code>Done</code> in the
+  terminal, open the report using <code class="bash">firefox pnm/mypnm_pnm1.html &amp;</code></li>
+</ul>
+
+<div class="aside">
+  If you don't see any plots at the top of the web page, right-click on the empty area,
+  and select <em>This Frame -> Reload Frame</em>.
+  </div>
+
+<p>
+Look at the report PNM generates. You should be able to see several unusual
+events in the respiratory trace!
+</p>
+
+<p> The second step of PNM takes the processed physiological data and makes the
+EVs for FEAT&mdash;we will show you how to use these later. To generate these, run the
+command listed at the bottom of the web page or simply: </p>
+
+<p>
+<code class="bash">./pnm/mypnm_pnm_stage2</code>
+</p>
+
+
+<p>
+We ran an analysis for you that included the physiological confound EVs generated by PNM (either only using PNM, or using PNM in combination with the standard motion parameter approach described above). Have a look at how this changes the results:</p>
+
+
+<pre class="bash">
+firefox naughty_pnm.feat/report_poststats.html &amp;
+firefox naughty_motion+pnm.feat/report_poststats.html &amp;
+</pre>
+
+
+<!-- ++++++++++ -->
+
+
+<h3>Motion outliers</h3>
+
+
+<p>
+As a last resort, we can completely ignore volumes that have been irreparably
+corrupted by motion. This is very similar to the concept of 'scrubbing', which
+just deletes any particularly bad volumes. However, deleting volumes is
+problematic as it disrupts the modelling of temporal autocorrelations. Instead,
+we can add another set of EVs to the GLM that indicate which volumes we want
+to ignore. We use <code>fsl_motion_outliers</code> to do this using the
+command below:
+</p>
+
+
+<pre class="bash">
+fsl_motion_outliers -i naughty.nii.gz -o my_outliers.txt -v
+</pre>
+
+
+<p>
+This may take a few minutes to run as this is multiband data.
+The <code>-v</code> flags simply prints some extra information, including the volumes that
+<code>fsl_motion_outliers</code> identifies as noisy. Open
+<code>naughty.nii.gz</code> in FSLeyes and check a few of these volumes.
+</p>
+
+<div class="quiz_question">
+
+  <span class="question">How many fsl_motion_outliers EVs will be added to the design matrix?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>One EV will be added, that contains all timepoints that should be removed</label>
+    <span id="option1" class="answer incorrect">Incorrect! This would assume that the effect on the BOLD timeseries is exactly the same each time the subject moves (which we would not typically expect).</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>One EV per volume will be added, to encode whether or not that timepoint should be removed</label>
+    <span id="option2" class="answer incorrect">Incorrect! There is no point to having EVs that only contain zeros. We only need to include EVs for the volumes that need to be removed.</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>One EV per volume to be removed will be added</label>
+    <span id="option3" class="answer correct">Correct! Each of these EVs will have zeros at all timepoint and a 1 at the timepoint that should be removed.</span><br/>
+  </form>
+</div>
+
+
+<p>
+Finally, we are ready to put this all together! Open FEAT and follow the
+instructions below to perform all the above motion corrections.
+</p>
+
+
+<ul class="pad-after">
+
+  <li>Load <code>naughty.feat/design.fsf</code>. This is the first design with
+  no noise correction.</li>
+
+  <li>Open the <b>Stats</b> tab and select <b>Standard + Extended Motion Parameters</b>
+  from the drop-down menu.</li>
+
+  <li>We enter the PNM EVs in the <b>Voxelwise Confound List</b> box. Select
+  <code>pnm/mypnm_evlist.txt</code>.</li>
+
+  <li>Add the outlier EVs using <b>Add additional confound EVs</b>. Select
+  <code>my_outliers.txt</code>.</li>
+
+  <li><b>DO NOT</b> press Go, as this will take too long to run.</li>
+</ul>
+
+
+<p>
+We have run this analysis for you, so take a look with:
+</p>
+
+
+<pre class="bash">
+firefox naughty_kitchen+sink.feat/report.html &amp;
+</pre>
+
+
+<p>
+Take a look at the design on the <b>Stats</b> page, which should now contain a
+smorgasbord of additional EVs. Finally, compare the results to both the
+<em>nice</em> data and the <em>naughty</em> data without any correction. Are
+the FSL tools for motion and physiological noise correction on Santa's naughty
+or nice list this year?
+</p>
+
+
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
+
+
+<hr/>
+<h2><a name="parametric">Contrasts in Parametric Designs</a></h2>
+
+
+<p>
+How can we investigate the way activation changes as a function of,
+for example, differing stimulus intensities? To demonstrate this, we will use
+a data set where words were presented at different frequencies. Sentences were
+presented one word at a time, at frequencies ranging from 50 words per
+minute (wpm) to 1250 wpm,
+and the participant just had to read the words as they were presented.
+This is an example of a parametric experimental design. The hypothesis is that certain brain regions respond more strongly to the optimum reading speed compared to the extremely slow and extremely fast word presentation rates (i.e. you might expect to find an inverted U-shape for the response to the five different levels). </p>
+
+
+<pre class="bash">
+cd ~/fsl_course_data/fmri3/parametric/
+firefox parametric.feat/report_stats.html &amp;
+</pre>
+
+
+<p>
+To begin with, we perform the f-test based analysis described in the lecture.
+Familiarise yourself with the way this is set up in the design file (ignore
+contrasts 5 to 8 for now). What is the f-test looking for?
+<span class="clickme" onclick="showIt('parametric#f-test')">Answer.</span>
+</p>
+
+
+<div id="parametric#f-test" class="answer" style="display: none">
+This looks for any voxels where there is any significant change between either level 1-2, or level 2-3, or level 3-4, or level 4-5&mdash;or any combination thereof. In other words, this is sensitive to any deviation from a flat response across word frequencies (this includes e.g. an inverted U-shape, a linear trend, a flat line with a single change at one end, etc).
+</div>
+
+
+<p>
+Looking at the <b>Post-stats</b>, the f-test passes significance in large
+swathes of the brain. But what shape of response is driving this result? To
+investigate this, we can inspect the raw parameter estimates (PEs) directly.
+</p>
+
+
+<pre class="bash">
+fslmerge -t response_shapes.nii.gz parametric.feat/stats/pe[13579].nii.gz
+</pre>
+
+
+<p>
+<code>pe1.nii.gz</code> contains the beta values from the GLM for the 50 wpm
+stimuli. In other words, this is a map of the strength of the BOLD response
+to words presented at 50 wpm (before statistical correction). The above
+command concatenates the PEs for all 5 EVs (ignoring the even numbered EVs
+which represent the temporal derivatives). This allows us to explore the
+specific response shapes in more detail.
+</p>
+
+
+<pre class="bash">
+fsleyes parametric.feat/example_func.nii.gz \
+        parametric.feat/thresh_zfstat1.nii.gz \
+        response_shapes.nii.gz &amp;
+</pre>
+
+
+<p>
+Open the timeseries display and turn on <code>response_shapes</code> only.
+Turn this off in the main view, and adjust the colour of
+<code>thresh_zfstat1</code> so you have a representative view of the f-stats.
+As you click around within the brain, the time series should now display the
+responses at that voxel for each of the five word presentation rates. <em>Keep
+this FSLeyes window open!</em>
+</p>
+
+
+<p>
+Can you find brain regions where the responses exhibit a U-shape? Or an
+inverted-U? How might one interpret these types of responses in light of the
+experimental paradigm?
+<span class="clickme" onclick="showIt('parametric#intepretation1')">Answer.</span>
+</p>
+
+
+<div id="parametric#intepretation1" class="answer" style="display: none">
+For example, we might expect an inverted-U shape in language regions: at low
+frequencies, the sentences are presented so slowly that they are easy to
+process; as frequency rises, processing the sentences becomes more
+challenging, increasing the load and hence BOLD response; finally, at some
+frequency the words are presented too fast to comprehend the sentence
+structure and the response will start to tail off. Voxel [70, 59, 47]
+demonstrates this trend nicely.
+</div>
+
+
+<!-- ++++++++++ -->
+
+<h3>Quantifying response shapes</h3>
+
+
+<p>
+It should be obvious that, in some regions, the parametric responses are
+very structured. How then, could we quantify these?
+</p>
+
+<p>
+To begin with, reopen the FEAT report and look at the design again. Contrasts
+5 to 8 encode two simple models for the response: linear and quadratic trends.
+Satisfy yourself with how we encode these as contrast weights.
+</p>
+
+<div class="quiz_question">
+
+  <span class="question">Which contrast describes the inverted U-shaped  trend?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>contrast 5</label>
+    <span id="option1" class="answer incorrect">Incorrect! Contrast 5 is a positive linear trend (i.e. it models an increasingly strong response from the lowest word presentation frequency to the highest word generation frequency).</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>contrast 6</label>
+    <span id="option2" class="answer incorrect">Incorrect! Contrast 6 is a negative linear trend (i.e. it models a gradually decreasing response from the lowest word presentation frequency to the highest word generation frequency).</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>contrast 7</label>
+    <span id="option3" class="answer incorrect">Incorrect! Contrast 7 is a U-shaped quadratic trend (i.e. it models high activation levels at both low and high word presentation frequencies, and a reduced response in middle presentation frequencies.</span><br/>
+
+    <input id="option4" class="option" type="radio" name="answer"/><label>contrast 8</label>
+    <span id="option4" class="answer correct">Correct! Contrast 8 is a inverted U-shaped quadratic trend with lower response at both extreme low and high word presentation frequencies, and a stronger response in middle presentation frequencies. </span><br/>
+  </form>
+</div>
+
+<p>
+Next, look at results in the <b>Post-stats</b> tab. Again, we can explore these
+further by loading the negative quadratic z-stats into FSLeyes  as a new overlay
+in the window we had opened (<code>parametric.feat/thresh_zstat8.nii.gz</code>).
+As you click around within the significant regions of this contrast, note the shape
+of the frequency response in the time series plot. If you have time, take a look at
+the linear contrasts too. Are different regions displaying different trends?
+<span class="clickme" onclick="showIt('parametric#intepretation2')">Answer.</span>
+</p>
+
+
+<div id="parametric#intepretation2" class="answer" style="display: none"> Note
+how the visual regions tend to peak at a higher frequency than the language
+regions. In the language regions, the peak response will correspond in some
+sense to reading speed. However, the intensity of the visual stimulus, in
+terms of items simply flashing on and off screen, will increase even as it
+becomes difficult to read the individual words.
+</div>
+
+<p>
+In summary, we have run an exemplar set of parametric analyses. We used an
+f-test to find any regions that showed different responses to different
+frequencies, and visualised what shape these responses took using the response
+time courses. We also quantified these responses in terms of a set of
+linear and quadratic trends to give an idea of the more complex analyses
+that can be run on this type of data.
+</p>
+
+<!--
+<p>
+<b>N.B.</b> At times, this section can be very technical! However, while some
+of the modelling specifics are well beyond a standard parametric analysis, we
+have included it because the results offer some nice examples of the power
+of parametric designs.
+</p>
+
+<p>
+One final question we may be interested in is <em>what is the presentation
+frequency that gives us the peak BOLD response?</em> We can use the set of
+commands below to answer this question. The maths is given
+<span class="clickme" onclick="showIt('parametric#maths')">here</span>
+for the curious, but this is not essential! The key here is to understand what the
+peak response frequency is representing, not how we derive it, as this is well
+beyond a standard analysis.
+</p>
+
+
+<div id="parametric#maths" class="answer" style="display: none">
+Our simple quadratic model is <i>y = a*x<sup>2</sup> + b*x</i>. The values of
+<i>a</i> and <i>b</i> are simply the COPEs for the quadratic and linear
+contrasts respectively. The maximum of this quadratic function is
+<i>x = &minus;b / 2a</i>, which represents the frequency at which we get
+our peak response. Finally, we have to convert the units to wpm and mask
+the result, as this result is not meaningful in regions where the quadratic
+model was not significant.
+</div>
+
+
+<pre class="bash">
+fslmaths parametric.feat/cluster_mask_zstat7.nii.gz -bin pos_mask.nii.gz
+fslmaths parametric.feat/cluster_mask_zstat8.nii.gz -bin neg_mask.nii.gz
+fslmaths neg_mask.nii.gz -add pos_mask.nii.gz mask.nii.gz
+fslmaths neg_mask.nii.gz -mul -1.0 -add pos_mask.nii.gz signed_mask.nii.gz
+
+linear=parametric.feat/stats/cope5.nii.gz
+quadratic=parametric.feat/stats/cope7.nii.gz
+fslmaths "$linear" -div -2.0 -div "$quadratic" \
+  -mul 300.0 -add 650.0 -mul mask.nii.gz \
+  peak_frequencies_wpm.nii.gz
+fslmaths peak_frequencies_wpm.nii.gz \
+  -mul signed_mask.nii.gz \
+  signed_peak_frequencies_wpm.nii.gz
+</pre>
+
+
+<p>
+Load <code>signed_peak_frequencies_wpm.nii.gz</code> into FSLeyes. Set
+positive and negative colour maps, and the display range between 0.1 and 1000.
+Turn the colour bar on. For every voxel that showed a significant quadratic
+response, this file displays at which frequency that response peaked. The sign
+of the frequency encodes whether the quadratic trend was U-shaped (positive)
+or an inverted-U (negative). Does this match what you expected from the
+exploratory analysis of the response time series earlier? Can you see any
+particular structure in the frequency responses?
+<span class="clickme" onclick="showIt('parametric#intepretation2')">Answer.</span>
+</p>
+
+
+<div id="parametric#intepretation2" class="answer" style="display: none"> Note
+how the visual regions tend to peak at a higher frequency than the language
+regions. In the language regions, the peak response will correspond in some
+sense to reading speed. However, the intensity of the visual stimulus, in
+terms of items simply flashing on and off screen, will increase even as it
+becomes difficult to read the individual words.
+</div>
+
+
+<p>
+In summary, we have run an exemplar set of parametric analyses. We used an
+f-test to find any regions that showed different responses to different
+frequencies, and visualised what shape these responses took using the response
+time courses. Finally, we quantified these responses in terms of a quadratic
+model and used this to visualise the frequencies at which the response in
+different brain regions peaked.
+</p>
+-->
+
+
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
+<hr/>
+<h2><a name="interactions">Interactions</a></h2>
+
+
+<p>
+In this section we will look for interaction effects between a visual and a
+motor task condition. During the visual condition, subjects passively watched
+a video of colourful abstract shapes. The motor condition involved uncued,
+sequential tapping of the fingers of the right hand against the thumb.
+Subjects were scanned for 10 minutes, which contained twelve 30s task blocks:
+four visual blocks, four motor blocks, and four blocks containing both
+conditions.
+</p>
+
+
+<p>
+To begin with, we have run a simple analysis in one subject that models the
+visual and motor conditions, but not the interaction between them. Take a look
+at the FEAT report and familiarise yourself with the task, the analysis, and
+the responses to the two conditions.
+</p>
+
+
+<pre class="bash">
+cd ~/fsl_course_data/fmri3/interactions/
+firefox 001/initial_analysis.feat/report.html &amp;
+</pre>
+
+
+<p>
+We will now run an analysis looking for interactions using this subject's
+data. Open FEAT and follow the instructions below:
+</p>
+
+
+<ul class="pad-after">
+
+  <li>Load <code>001/initial_analysis.feat/design.fsf</code> (Note that if
+  you are doing this using the pop up window, you may need to delete IMAGE
+  in the Filter box at the top to display the text file) and change from a
+  <b>Full analysis</b> to <b>Statistics</b> in the drop down box at the
+  top. To save time, we will use the data that has already been preprocessed
+  during the first analysis, and limit ourselves to a few slices.</li>
+
+  <li> In the <b>Data</b> tab choose <code>001/preprocessed_slices.nii.gz</code>
+  as the 4D data, and change the output name to
+  <code>interaction_analysis.feat</code>. Ignore any warnings about BET and
+  preprocessing options.</li>
+
+  <li>Open <b>Full model setup</b> under the <b>Stats</b> tab. For the
+    <b>Filename</b> of EV1 choose
+    <code>timings/motor.txt</code>.  For the
+    <b>Filename</b> of EV2 choose
+    <code>timings/visual.txt</code>. Add a third EV and
+    set its shape to <b>Interaction</b>. Add the appropriate contrasts for
+    the positive and negative interaction effects.</li>
+
+  <li>Press <b>Go</b>! This should only take a couple of minutes to run.</li>
+</ul>
+
+
+<p>
+What interaction effects do you see in this subject? How do you interpret
+them?
+<span class="clickme"
+onclick="showIt('interactions#intepretation1')">Answer.</span>
+</p>
+
+
+<div id="interactions#intepretation1" class="answer" style="display: none">
+The positive interaction shows regions that were more active during the
+combined condition than a simple linear combination of the visual and motor
+conditions would suggest. If you <em>really</em> squint, you can make an
+argument that this looks like the task-positive network&#8230; The negative
+condition is simply the opposite: regions where the activity in the combined
+condition was less than a simple linear combination of the visual and motor conditions.
+</div>
+
+<!-- ++++++++++ -->
+
+<h3>Group analysis</h3>
+
+
+<p>
+We have run a straightforward group analysis of this data on a set of nine
+subjects. Familiarise yourself with the results by looking at the FEAT
+report:
+</p>
+
+
+<pre class="bash">firefox group/group.gfeat/report.html &amp;</pre><br>
+
+<p>And take a closer look at the results for the interaction contrasts in
+FSLeyes:</p>
+
+<pre class="bash">
+fsleyes -std \
+  group/group.gfeat/cope5.feat/thresh_zstat1.nii.gz -cm red-yellow -dr 3.1 6.0 \
+  group/group.gfeat/cope6.feat/thresh_zstat1.nii.gz -cm blue-lightblue -dr 3.1 6.0 &amp;
+</pre>
+
+
+<p>
+What interaction effects do we observe at the group level? How do you interpret
+them?
+<span class="clickme"
+onclick="showIt('interactions#intepretation2')">Answer.</span>
+</p>
+
+
+<div id="interactions#intepretation2" class="answer" style="display: none">
+The interpretation of the effects is as before. Note how several of the regions
+of the default mode network are present in the negative condition&mdash;we
+can interpret this as the default mode being more deactivated by the more
+cognitively challenging combined condition.
+</div>
+
+
+
+<p>
+Note that in this case, the interaction contrast gave us a relatively
+straightforward set of results. However, this is primarily because we were
+looking at the interaction between two simple, distinct conditions in a
+relatively small data set in order to run things in this session. In
+targeted experiments, interaction based designs can be very powerful and the
+analysis pipeline is exactly as presented here.
+</p>
+
+
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
+<hr/>
+<h2><a name="contrastmasking">Contrast Masking</a></h2>
+
+
+<p>
+Differential contrasts and F-tests are sensitive to positive <em>and</em>
+negative changes in BOLD.  To separate out positively driven from
+negatively driven results we use <em>Contrast Masking</em>.  For
+example, in a differential contrast like <i>A &minus; B</i>, a significant
+result occurs whenever <i>A &minus; B &gt; 0</i>, but this could be driven by
+either <i>A &gt; B</i> where both are positive, or by <i>B &lt; A</i> where
+both are negative (i.e. <i>B</i> is more negative than <i>A</i>).
+</p>
+
+
+<p>
+We will look at the <i>Shad &gt; Gen</i> contrast (word shadowing
+<em>greater than</em> generation) from the fMRI fluency dataset (from the
+first FEAT practical) in order to see if the result is associated with
+positive or negative shadowing and generation responses. In
+<code>contrast_masking</code> you will see a copy of the analysis
+we asked you to run in an earlier practical.  Back up these results with
+the command:
+</p>
+
+
+<pre class="bash">
+cd ~/fsl_course_data/fmri3/contrast_masking
+cp -r fmri.feat fmri_orig.feat
+</pre>
+
+
+<p>
+Quickly review the results of this analysis (and in particular, the
+<i>Shad &gt; Gen</i> contrast) to refresh your memory.
+</p>
+
+
+<p>
+We can apply contrast masking without re-running the whole analysis
+by starting the FEAT GUI and doing the following:
+</p>
+
+
+<ul class="pad-after">
+
+  <li>Change the type of analysis in the top right pull-down menu from
+  <b>Full analysis</b> to <b>Statistics</b>.</li>
+
+  <li>In the <b>Data</b> tab, click on the <b>Input is a FEAT directory</b>
+  checkbox.  Use the <b>Select FEAT directory</b> button to choose
+    the <code>fmri.feat</code> directory. Ignore any warnings.</li>
+
+  <li>Open <b>Full model setup</b> under the <b>Stats</b> tab. For the
+    <b>Filename</b> of EV1 choose
+    <code>word_generation.txt</code>.  For
+    the <b>Filename</b> of EV2 choose
+    <code>word_shadowing.txt</code>.</li>
+
+  <li>Go to the <b>Post-stats</b> tab and click on the <b>Contrast masking</b>
+  button. In the window that pops up you can select which contrasts to mask
+  with which others.  In this case we will click on buttons in the
+  row <em>Mask real Contrast 4 with:</em> and the columns <b>C1</b>
+  and <b>C2</b> (as Contrast 4 = <i>Shad &gt; Gen</i>; C1 =
+  <i>Generation</i>; C2 = <i>Shadowing</i>). Also click on the
+  <em>Mask using (Z>0) instead of (Z stats pass thresholding)</em> because we
+  are not interested in the individual components (C1 and C2) being
+  significant, but we do want to know if they were positive.</li>
+
+  <li>This contrast masking setup is now complete and will show the results
+  where <i>Shad &gt; Gen</i> <b>and</b> <i>Gen &gt; 0</i>
+  <b>and </b> <i>Shad &gt; 0</i>. Now click <b>OK</b>.
+
+  <li>Once you have done all this, click on <b>Go</b> and wait for a couple of
+  minutes to see the result.
+</ul>
+
+<div class="quiz_question">
+
+  <span class="question">You should see that the cluster associated with contrast 4 (<i>Shad &gt;
+Gen</i>) no longer appears. What is the explanation for this?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>The result we saw previously was primarily driven by deactivations in the word generation condition compared to word shadowing.</label>
+    <span id="option1" class="answer correct">Correct! The results that were previously found were not in regions that showed a positive effect for both word generation and word shadowing, meaning that the effect was driven by a deactivation.</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>The result we saw previously was primarily driven by larger activation in the word shadowing condition compared to word generation</label>
+    <span id="option2" class="answer incorrect">Incorrect! If this would have been the case, then the same regions would have shown up in the contrast masked results.</span><br/>
+
+  </form>
+</div>
+
+<p>
+Note that it is difficult to determine this directionality in other ways, such
+as looking at timeseries plots.  However, it can be confirmed by loading the
+appropriate COPE images into FSLeyes, as these will show negative values in
+the <code>stats/cope1</code> image (the <i>Generation</i> condition) in the
+area associated with the medial posterior cluster.
+</p>
+
+
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
+<hr/>
+<p class="centred">The End.</p>
+</div>
+</body>
+</html>

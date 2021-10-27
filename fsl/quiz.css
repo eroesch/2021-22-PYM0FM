@@ -1,0 +1,42 @@
+div.quiz_question {
+    width            : 50%;
+    margin           : auto;
+    padding          : 10px 10px 0px 10px;
+    border           : 1px solid black;
+    border-radius    : 20px;
+    background-color : #eeeeff;
+}
+
+div.quiz_question2 {
+    width            : 50%;
+    margin           : auto;
+    padding          : 10px 10px 10px 10px;
+    border           : 1px solid black;
+    border-radius    : 20px;
+    background-color : #eeeeff;
+}
+
+div.quiz_question span.question, div.quiz_question2 span.question {
+    font-weight : bold;
+}
+
+div.quiz_question form {
+    padding : 10px;
+}
+
+div.quiz_question span.answer {
+    padding : 10px 10px 0px 10px;
+    display : none;
+}
+
+div.quiz_question input {
+    float : left;
+}
+
+div.quiz_question label {
+    display     : block;
+    margin-left : 20px;
+}
+
+div.quiz_question span.correct   { color : green;   }
+div.quiz_question span.incorrect { color : red;     }

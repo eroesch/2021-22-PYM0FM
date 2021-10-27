@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+
+<!-- Start of Practical boilerplate. -->
+<link rel="stylesheet" type="text/css" href="../../../fsl/fsl.css" />
+<link rel="stylesheet" type="text/css" href="../../../fsl/quiz.css">
+<link rel="stylesheet" type="text/css" href="../../../fsl/viz.css">
+
+<script type="text/javascript" src="../../../fsl/quiz.js"></script>
+<script type="text/javascript" src="../../../fsl/showhide.js"></script>
+<script type="text/javascript" src="../../../fsl/viz.js"></script>
+<script type="text/javascript">
+window.onload=function() {
+    setupQuizQuestions();
+    var graphs = document.querySelectorAll(".viz-graph");
+    var parser = new DOMParser;
+    for (var i = 0; i < graphs.length; i++){
+        var div = graphs[i];
+        var dom = parser.parseFromString(div.innerHTML, "text/html");
+        div.innerHTML = Viz(dom.body.textContent);
+        var svg = div.querySelector("svg");
+        svg.setAttribute("width",  "100%");
+    }
+}
+</script>
+<!-- End of Practical boilerplate. -->
+
+<title>FEAT 2 Practical</title></head>
+<body>
+
+
+<div id="practical">
+<h1 class="centred">FEAT 2 Practical</h1>
+
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
+
+<p>
+This tutorial leads you through examples of higher-level group
+analysis in FEAT.
+</p>
+
+<h2>Contents:</h2>
+<dl class="contents">
+  <dt> <a href="#ptt">Paired t-test</a></dt>
+  <dd> Perform a group-level analysis of a repeated measure
+    experiment, using the paired t-test.</dd>
+
+  <dt> <a href="#multisession">Group analysis with multiple sessions for each
+  subject</a></dt>
+  <dd> Perform second and third level analyses for an experiment with
+   multiple sessions per subject.</dd>
+</dl>
+
+
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
+
+
+<hr/>
+<h2><a name="ptt">Paired t-test</a></h2>
+
+<p>
+We have a group of six subjects, each scanned twice: once doing motor tasks
+with their left hand, and once with their right hand. This is a stroke study, and
+hence comparing left and right motor function is particularly interesting in
+this case. Within each run, subjects completed different blocks of index
+finger movement, sequential finger movement and random finger movement.
+</p>
+
+
+<p>
+<b>Research question</b>:
+Is there a significant left vs right hand finger movement paired-difference,
+generalisable to the population from which the subjects are drawn?
+</p>
+
+
+<p>
+To address this, we want the <i>left &minus; right</i> paired mean
+difference within a mixed effects model, taking into account the within-subject
+fixed effects variances and the between-subject random effect variance. This
+is done as a two-level analysis with the following structure:
+</p>
+
+
+<ul>
+<li><b>Level 1: Single-session analyses</b> There are 6 subjects &times;
+2 sessions = 12 first-level FEAT analyses. These have already been done
+for you.</li>
+
+<li><b>Level 2: Between-subject analysis</b> We do a separate second-level
+analysis for each of the first-level contrasts, and estimate the mean (paired)
+difference for each.</li>
+</ul>
+
+
+<p>
+In FSL terminology, each contrast is represented by a COPE (contrast of
+parameter estimate), and it is these which we pass up to any higher-level
+analysis. Note that as well as the COPEs, FEAT passes the variance of these
+COPEs (VARCOPEs), and even the uncertainty in the variance of these
+COPEs (DOFs; degrees-of-freedom), between the different levels.
+</p>
+
+
+<div class="centred" style="width: 70%;">
+  <a href="higher_level_flowchart.png" target="_blank">
+  <img src="higher_level_flowchart.png"
+       alt="Higher level analysis flowchart"
+       width="100%"/>
+  </a>
+</div>
+
+<div class="quiz_question">
+
+  <span class="question">What do the values in a COPE image obtained from the single-session analysis represent?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>The parameter estimates for a certain EV</label>
+    <span id="option1" class="answer incorrect">Incorrect! COPE (contrast of parameter estimates) images contain combinations of parameter estimates for a certain contrast. For a simple 1 0 contrasts, these may be the same as the parameter estimates for a certain EV, but for more complex contrasts such as 1 -1 these have to be calculated by combining the EV parameter estimates in the correct proportions.</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>The parameter estimates for a certain contrast</label>
+    <span id="option2" class="answer correct">Correct! COPE (contrast of parameter estimates) images are calculated by performing simple algebra on the EV parameter estimates. For example, for the contrasts 1 -1, the contrast parameter estimate is calculated by subtracting the parameter estimate for EV 2 from the parameter estimate for EV1. The COPE image will show regions in the brain in which this difference is large.</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>The uncertainty of the parameter estimates for a certain contrast</label>
+    <span id="option3" class="answer incorrect">Incorrect! The uncertainty (or variance) is contained in the VARCOPE image.</span><br/>
+  </form>
+</div>
+
+<!-- ++++++++++ -->
+
+<h3>First-level analyses</h3>
+
+
+<p>
+Each first-level analysis contains 6 contrasts, each related to the different 
+types of finger tapping performed in the scanner
+(e.g. mean response over the different conditions, index finger only, etc.). Thus
+there are 6 COPEs in the <code>stats</code> subdirectory of each
+first-level <code>.feat</code> directory. A higher-level FEAT analysis 
+entails an independent analysis on each of these contrasts (i.e. a second-level analysis
+of all subjects' first-level <i>mean</i> contrasts, a separate
+second-level analysis of all first-level <i>index</i> contrasts,
+etc.). Each of these second-level analyses is performed simultaneously and will form a
+separate <code>cope?.feat</code> directory inside a
+newly-created <code>.gfeat</code> directory.
+</p>
+
+
+<pre class="bash">
+cd ~/fsl_course_data/fmri2/paired_ttest
+</pre>
+
+
+<p>The first-level analyses are held in 6 different directories within
+<code>~/fsl_course_data/fmri2/paired_ttest</code>, one for each subject. The
+subject directories are <code>ac at cm df dn eg</code>. There are two
+first-level FEAT directories within each of these, and these have already
+been run for you. Have a quick look at one of the lower-level reports if 
+you want to familiarise yourself with the study design and data.
+</p>
+
+
+<!-- ++++++++++ -->
+
+<h3>FEAT set-up</h3>
+
+
+<p>
+Open FEAT (<code class="bash">Feat &amp;</code> or
+[<code class="bash">Feat_gui &amp;</code> on a mac]) and follow the
+instructions below to set up the higher-level analysis.
+</p>
+
+
+<p>
+First, change <b>First-level analysis</b> to <b>Higher-level analysis</b> in
+the drop down box at the top.
+</p>
+
+
+<h4>Data</h4>
+
+
+<p>Here we are going to set up the input data for our higher level
+analysis. First, change the <b>Number of inputs</b> to 12 (i.e. 6 subjects
+&times; 2 sessions).</p
+
+
+<p>Press <b>Select FEAT directories</b>.  At this stage, you need to decide on
+a <em>sensible</em> order for the first-level analyses. You could choose to
+group the analyses by subject (i.e. <code>ac/ac_left.feat</code>,
+<code>ac/ac_right.feat</code>, <code>at/at_left.feat</code>, etc.), or you
+could group by condition (i.e. <code>ac/ac_left.feat</code>,
+<code>at/at_left.feat</code>, &#8230;, <code>ac/ac_right.feat</code>, etc.).
+We recommend the latter option, because this matches the
+<a href="../../../../fsl/fslwiki/FEAT/UserGuide.html#Paired_Two-Group_Difference_.28Two-Sample_Paired_T-Test.29"
+target="dynamic">example paired t-test in the FEAT manual</a>, and also
+matches the way the paired t-test is set up for you if you use the <b>Model
+setup wizard</b> (explained below).</p>
+
+
+<p>You can often avoid having to tediously hand-select each of these
+first-level FEAT directories separately, using the <b>Paste</b> button. If you
+press this, a new free-text window comes up, within which you can paste text
+(in this case the list of first-level FEAT directories) which you can copy,
+e.g. from a list in a terminal. Press <b>Clear</b> to clear the text
+window. Then in your terminal, making sure you are inside the
+<code>paired_ttest</code> directory, type: </p>
+
+
+<pre class="bash">
+ls -d1 "$PWD"/??/??_left.feat ; ls -d1 "$PWD"/??/??_right.feat
+</pre>
+
+
+<p>How does this command work?
+<span class="clickme" onclick="showIt('parametric#f-test')">Answer.</span>
+This should give you a complete listing of the full pathnames of the FEAT
+directories in the right order. You can now highlight this list with the
+mouse, and paste it into the FEAT paste window with the middle mouse
+button, or by clicking in the paste window and
+pressing <code>control-y</code>. </p>
+
+
+<div id="parametric#f-test" class="answer" style="display: none">
+<code>ls -1d</code> lists a set of files or
+directories. The <code>-1</code> flag prints each result on a separate
+line, and <code>-d</code> means that only directory names, rather than
+their contents, are shown. The <code>"$PWD"</code> part fills out the full
+pathname of the current directory. The <code>?</code> characters are
+expanded by the shell to fit any single character, in alphabetical
+order. The command is repeated so that the <code>_left</code> FEAT
+directories are listed first, and then all the <code>_right</code>. </div>
+
+<p> To save time, we will only pass the <i>mean</i> contrast up to the top 
+level. Make sure that <b>ONLY</b> contrast 1 is selected in the <b>Use
+lower-level copes</b> boxes.</p>
+
+<p>When this is done, set the <b>Output directory</b> to
+<code>paired_ttest_ols</code> (the full path will end up as
+<code>/home/$HOME/fsl_course_data/fmri2/paired_ttest/paired_ttest_ols.gfeat</code>).</p>
+
+
+<h4>Stats</h4>
+
+
+<p>Select the <b>Mixed Effects: Simple OLS</b> option from the top drop down
+box.  Also, make sure that the <b>Use automatic outlier de-weighting</b>
+button is <b>NOT</b> turned on. It is important that these two settings are
+chosen, otherwise the analysis will not be quick enough to be of use to you in
+the time that we have available for the practical.  Normally, we recommend
+that the more accurate "Mixed Effects: FLAME 1" option is used in
+combination with outlier de-weighting, for the reasons outlined in the
+lectures. However, in the interest of speed, in this practical we choose the
+faster OLS option without outlier de-weighting. </p>
+
+<p> With this design you can use the <b>Model setup wizard</b>, which provides
+an easy way of setting up a few simple designs. Select <b>two groups,
+paired</b> and press <b>Process</b>. You will now see the design matrix that
+has been created for you.</p>
+
+<p>To understand how this is controlled in detail, click on <b>Full model
+setup</b>.</p>
+
+<ul class="pad-after">
+  <li>The inputs (<em>Input 1</em> to <em>Input 12</em>) correspond to the
+  order you entered the first-level FEAT directories&mdash;it
+  is <em>essential</em> that your design matches the order you entered the
+  lower level directories under the <b>Data</b> tab! Note also that the first
+  column, labelled <em>Group</em>, corresponds to groupings of inputs that
+  will share the same random effects (RE) variance in this level of the
+  model. Here, we let all subjects have the same RE variance (i.e. the
+  <em>Group</em> column should be left as all 1s). </li>
+
+  <li>There are 7 EVs: EV 1 models the <i>left &minus; right</i> paired
+  difference, and EVs 2-7 are confounds which model out each subject's mean
+  (this is what makes the design a paired t-test).</li>
+
+  <li>Click on the <b>Contrasts &amp; F-tests</b> tab. There are two contrasts
+  set up for you by the wizard. EVs 2-7 are confounds of no interest and so do
+  not appear in the contrasts. Hence, the contrasts only involve EV1. Change
+  the <b>Titles</b> boxes to read <i>left &gt; right</i> and <i>right &gt;
+  left</i>.</li>
+
+  <li> Press <b>Done</b>.</li>
+</ul>
+
+
+<h4>Post-stats</h4>
+
+
+<p>Because we only use a small number of subjects in order to make it possible 
+to run the analysis in the practical session, we will reduce the cluster 
+threshold slightly. This will allow us to see some more results, but is 
+<b>NOT</b> recommended for your own analyses. In the <b>Thresholding</b> box 
+change the <b>Z threshold</b> to 2.3.</p>
+
+
+<h4>Go!</h4>
+
+
+<p>Press <b>Go</b>! The web browser that appears monitors the overall progress.
+This second-level analysis should take about 5 minutes. While you're waiting, 
+either make a cup of tea (but do <b><u><i>NOT</b></u></i> add milk while the bag is 
+still in the water) or familiarise yourself with the 
+introduction to the next major section of the practical on group analyses with multiple sessions per
+subject.
+</p>
+
+<!-- ++++++++++ -->
+
+<h4>Results</h4>
+
+
+<p>
+Higher-level FEAT runs produce <code>.gfeat</code> directories. Once the
+analysis has finished, explore the web report. This top-level report provides
+links to the previous level reports, a registration summary page and links to
+the separate higher-level reports.
+</p>
+
+
+<p>
+<b><em>LOOK AT YOUR DATA</em></b>!  In particular it is always important to
+check the registration summary report page very carefully, to ensure that all
+lower-level registrations succeeded. If any of the lower-level FEATs look like
+the registration has failed badly, you need to fix this before re-running the
+higher-level FEAT analysis. Note that field maps were not acquired with this 
+data&mdash;you should be able to spot this on the registration page!
+</p>
+
+
+<p>
+In the results page you get a link to the group results from running the
+group-level analysis on each first-level contrast. Within each contrast you
+get a group-level results page showing the standard post-stats output.
+However, note that the <em>time course</em> outputs in these higher-level
+results no longer refer to <em>time</em> (despite the heading).  They refer to
+subject (or session) number. In this case that is the 12 sessions (6 subjects
+&times; 2 conditions) in the study, and it is effect size shown on the
+vertical axis, rather than normalised MRI signal.  Have a look at this and the
+other parts of the results webpage and make sure you understand what is being
+shown.
+</p>
+
+
+<!-- ++++++++++ -->
+
+<h4>Pre-baked analyses</h4>
+
+<p>
+We have run a full analysis for you on this data (i.e. on all the contrasts, 
+using FLAME for statistics, and with 
+the recommended Z-thresholds). Take a quick look at this report as well.
+</p>
+
+<pre class="bash">
+firefox examples/flame.gfeat/report.html &
+</pre>
+
+<p>
+Can you spot any major differences between the two analyses?
+</p>
+
+<!-- ++++++++++ -->
+
+<!--
+<h4>Optional extras</h4>
+
+<p>
+If you get spare time at the end of this session, there are
+two other analyses of interest:
+</p>
+
+
+<ul class="pad-after">
+
+  <li>In the FEAT GUI, load in the <code>design.fsf</code> from the
+  <code>.gfeat</code> directory. Change the modelling/estimation method to
+  <b>Mixed Effects: FLAME 1</b>, which is nearly as accurate as full FLAME and
+  nearly as fast as OLS. Change the output directory name to reflect this
+  option. Under the <b>Data</b> tab, deselect all of the <em>lower-level
+  copes</em> except 2 - this tells the group FEAT to only run the second-level
+  analysis on the second of the first-level contrasts, not all 5. After
+  completion (5-10 minutes), compare with the OLS results. The FLAME results
+  do look &quot;nicer&quot;, as well as there being some new plausible
+  activations that were not previously found.</li>
+
+  <li>Whilst the above is running, get another analysis ready to
+  run&mdash;revert to the OLS option, and change the model to the simpler
+  unpaired t-test (use the wizard, and make sure that you understand the EVs
+  and contrasts that the wizard sets up for you), re-run and compare with the
+  paired t-test results (note: you may not see any significant activations
+  with the unpaired test).</li>
+</ul>
+-->
+
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
+<hr/>
+<h2><a name="multisession">Group analysis with multiple sessions for each
+subject</a></h2>
+
+
+<p>
+It is common to split a task up into multiple short scans instead of having one long scan.
+This can often help to reduce subject movement in the scans, and also to keep the attention of your participant.
+As a result, we need to combine data across multiple scanning sessions using a three-level FEAT analysis.
+</p>
+
+
+<p>
+The data consists of a set of subjects, each scanned twice several months
+apart. For simplicity's sake, we will look for a simple mean effect across
+subjects and sessions. Hopefully this will help you understand how this analysis can be
+extended to more complex questions.
+</p>
+
+
+<p>
+We want the mean group effect, within a mixed effects model,
+taking into account the within-subject fixed effects variances and the
+between-subject random effect variance. This is done in THREE levels:
+</p>
+
+
+<ul class="no-pad">
+
+  <li><b>Level 1: Within-session analysis</b>. There are 5 subjects &times; 2
+  sessions = 10 of these first level FEAT analyses, which have already been
+  done for you.</li>
+
+  <li><b>Level 2: Between-session analysis</b>. Here, we input the data from
+  Level 1, and estimate each subject's mean response.</li>
+
+  <li><b>Level 3: Between-subject analysis</b>. We input the data
+  corresponding to the subject means from Level 2, model the between-subject
+  variances and estimate the group mean response.</li>
+</ul>
+
+
+<p>
+Because each subject will typically only have a handful of sessions, we do
+<em>not</em> run a <i>mixed effects</i> second-level analysis to get an
+estimation of each subject's mean response. The reason for this is that we
+would not be able to get a good estimation of the within-subject
+session-to-session variance with a limited number of sessions. Hence we choose
+to ignore the session-to-session variance by using a <i>fixed effects</i>
+analysis at this second level. See <span class="clickme"
+onclick="showIt('multisession#fixedeffects')">here</span> for a more involved
+discussion of the choice of a fixed effects analysis.
+</p>
+
+
+<div id="multisession#fixedeffects" class="answer" style="display: none;">
+  <p>If you are carrying out a mid-level analysis (e.g., cross-session) that
+  will be fed into an even higher-level analysis (e.g., cross-subject), then
+  it could be argued that a mixed-effects analysis should be done at the
+  mid-level. A mixed-effects analysis would assume that the sessions are
+  randomly sampled from a <em>population</em> of sessions that that subject
+  could produce. This includes estimation of each subject's session-to-session
+  variance. However, it is common for only a small number of sessions to be
+  collected for each subject, making estimation of each subject's
+  session-to-session variance impractical. One solution to this is to assume a
+  common session-to-session variance for all subjects, thereby providing
+  enough data for the session-to-session variance to be estimated. However,
+  this has a downside in that you lose information about which subjects are
+  good (i.e. low variance) and which subjects are bad (i.e. high variance).
+  Hence, when only a small number of sessions have been collected for each
+  subject (say, less than 10), it is recommended that you use a fixed effects
+  analysis at the mid-level. This in effect treats the multiple first-level
+  sessions (for each subject) as if they were one long session, and estimates the simple average across the sessions. Although this
+  does ignore the session-to-session variability at this level, it is arguable
+  that this is not of interest anyway (this is a somewhat philosophical
+  debate).  However, the combined session and subject variability will still
+  affect (and be estimated at) the next level. </p>
+
+
+  <p>In short, fixed effects is favoured as it avoids practical problems
+  associated with estimating the session-to-session variance (when there are
+  not many sessions per subject), at the same time as maintaining information
+  about which subjects are good and bad (i.e. low or high variance).</p>
+</div>
+
+
+<p>
+In addition to this, the analysis cannot be combined into a single second-level
+analysis. This is tempting as a design matrix can easily be formed containing
+each subject's mean (across sessions) as a separate EV, and then contrasts
+can be formed to test the mean across all subjects. The problem with this
+model is that there are two separate sources of variability (session-to-session
+and subject-to-subject) but, within FSL, a single level cannot model more than 
+one separate sources of variance.
+<!-- they cannot be modelled properly (with the correct weighting) in a single level. -->
+</p>
+
+
+<!-- ++++++++++ -->
+
+<h4>First-level analyses</h4>
+
+<p>
+In both sessions, subjects performed the "Pyramids &amp; Palm Trees" task
+(PPTT). Participants are presented with a target image, and are asked to select
+the image they most associate with the target from a pair of additional
+images. The canonical example is below:
+</p>
+
+<div class="centred">
+<a href="PPTT_example.jpg" target="_blank">
+<img src="PPTT_example.jpg" alt="Example stimulus"
+     width=450" />
+</a>
+</div>
+
+
+<p>
+This is meant to be a test of semantic memory, as the task requires reasoning
+about the links between objects. There is also a control condition, where
+participants have to match abstract line drawings. We are primarily interested
+in the <i>semantic &gt; lines</i> responses. To begin with, familiarise
+yourself with the first-level design and typical responses in one of the
+session-specific FEAT analyses we have run for you:
+</p>
+
+
+<pre class="bash">
+cd ~/fsl_course_data/fmri2/3_levels
+</pre>
+
+
+<p>
+Take a quick look at one of the web reports within the run directories of the
+<code>level_1/</code> directory.
+</p>
+
+
+<!-- ++++++++++ -->
+
+
+<h4>Second-level analysis</h4>
+
+
+<p>
+We will now set up the second-level (i.e. within-subject) analysis. Open FEAT
+(<code class="bash">Feat &amp;</code> [or <code class="bash">Feat_gui
+&amp;</code> if on a mac]) and follow the instructions below:
+</p>
+
+
+<ul class="pad-after">
+
+
+  <li>Change <b>First-level analysis</b> to <b>Higher-level analysis</b>.</li>
+
+
+  <li> Change the <b>Number of inputs</b> to 10 (5 subjects &times; 2
+  sessions).</li>
+
+
+  <li>
+  <p>Press <b>Select FEAT directories</b>. Again, you need to specify the
+  first-level FEAT directories in a sensible order: subject 1, sessions 1, 2;
+  then subject 2, sessions 1, 2; etc. There are lots of ways we can enter 
+  these into the GUI: we can enter them individually into the GUI by hand, 
+  but this can be laborious for large studies; we can type out the names in a 
+  file and use the <b>Paste</b> window; or we could do some simple <code>ls</code> commands 
+  and then reorder the outputs as necesary in a text editor. Finally, if we 
+  have chosen a sensible naming convention we may be able to script the 
+  whole process.</p>
+
+  <p>To save time, we will use a command to generate the names we need.</p>
+<p>
+To generate the list, use the command given 
+<span class="clickme" onclick="showIt('multisession#pastecommand')">here</span>.
+</p>
+
+  <p><div id="multisession#pastecommand" class="answer" style="display: none;">
+  <pre class="bash">
+for sub in CON_417 CON_425 CON_428 CON_429 CON_430 ; do 
+  ls -1d $PWD/level_1/run_1/$sub/*.feat ; 
+  ls -1d $PWD/level_1/run_2/${sub}_2/*.feat ; 
+done
+</pre>
+  <p>Note how this command is more complicated than the ones we have used 
+  to generate file lists before. This is because of the naming convention we have 
+  chosen! Setting up a sensible naming convention from the start will make 
+  subsequent analyses immeasurably easier.</p>
+  </div></p>
+
+  <p>Select the text and right-click copy the generated list of names. Paste this text (control-y) in the <b>Paste</b> window. 
+  
+  </li>
+
+<!--
+<pre class="bash">
+for subject in level_1/run_1/*; do
+  subject=$(basename "$subject")
+  ls -1d "$PWD"/level_1/run_?/"$subject"*/*.feat
+done
+</pre>
+-->
+
+  <li> To save time, we will only pass the <i>semantic &gt; lines</i> and
+  <i>semantic &lt; lines</i> contrasts up to the higher levels. Make sure
+  that <b>ONLY</b> contrasts 1 &amp; 2 are selected in the <b>Use
+  lower-level copes</b> boxes.</li>
+
+
+  <li> Set the <b>Output directory</b> to
+  <code>level_2</code>
+  </li>
+
+  <li> Go to the <b>Stats</b> tab and select the <b>Fixed-effects</b>
+  option.</li>
+
+  <li> Press <b>Full model setup</b>. Remember that the <em>Inputs</em> (1-10)
+  correspond to the order you entered the first-level FEAT directories. As
+  this is a fixed effects analysis the <em>Group</em> column is ignored so
+  leave all these entries as 1 (<em>if</em> we had lots of sessions and did a
+  mixed effects analysis instead then we would use a unique number in this
+  column for each subject (i.e. within each subject we would estimate a
+  separate variance).</li>
+
+
+  <li>We need 5 EVs: one for each subject mean. Change the 0s to 1s
+  appropriately, in such a way that each EV models a different subject mean.
+  We then need to pass the 5 parameter estimates (PEs) corresponding to the 5
+  subject means through to the third level as COPEs. To enable this, we need
+  to have a contrast for each subject mean that just selects that parameter.
+  Set the contrasts appropriately. Your design matrix should now match this
+  <span class="clickme" onclick="showIt('multisession#level2design')">complete
+  design matrix.</span>
+
+  <p><div id="multisession#level2design" class="answer" style="display: none;">
+  <img src="level_2_design.png" alt="Level 2 design matrix" align="middle" width=300 />
+  </div></p>
+  </li>
+
+
+  <li> Press <b>Done</b>. The default <b>Post-stats</b> are fine (in fact, the
+  post-stats don't affect what gets passed up to third-level). You are now
+  ready to run the second-level analysis so press <b>Go</b>!</li>
+</ul>
+
+<div class="aside">
+If something has gone wrong with your analysis, or it is taking too long to run, 
+there is a pre-baked version available: <code>examples/level_2.gfeat</code>. 
+You can use this as the input to the third level analysis too if necessary.
+</div>
+
+<p> This analysis should only take a couple of minutes to run. Wait for the
+result web pages and then view them <em>carefully</em>. Check that the
+registrations are accurate, and then take a look at the results.
+</p>
+
+
+
+
+<!-- ++++++++++ -->
+
+<h4>Third-level analysis</h4>
+
+
+<p>
+We are now ready to set up the third-level (i.e. between-subject) analysis.
+This will be valid for one of the contrasts we passed up to the second level
+(but it easy to repeat the analysis for the others). We will use the
+<i>semantic &gt; lines</i> results, which corresponds to contrast 1.
+Reopen FEAT (<code>Feat &amp;</code>) and follow the instructions below:
+</p>
+
+
+<ul class="pad-after">
+
+  <li>Change <b>First-level analysis</b> to <b>Higher-level analysis</b>.</li>
+
+  <li>Change <b>Inputs are lower-level FEAT directories</b> to <b>Inputs are
+  3D cope images from FEAT directories</b>. The inputs will be the 5 COPE
+  images, one for each subject mean, from the second-level analysis.</li>
+
+  <li> Change the <b>Number of inputs</b> to 5 (each corresponding to a
+  subject mean).</li>
+
+  <li><p>Press <b>Select cope images</b> and enter the COPEs from the second
+  level.  These will be inside the <code>cope1.feat/stats</code> directory
+  which is inside the second-level <code>level_2.gfeat</code> directory that
+  you just created. The relevant command for pasting is:</p>
+
+
+<pre class="bash">
+ls -1d "$PWD"/level_2.gfeat/cope1.feat/stats/cope?.nii.gz
+</pre>
+
+<div class="quiz_question">
+
+  <span class="question">What does the <code>cope1.feat/stats/cope5.nii.gz</code> represent?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>The mean for subject 1 for the fifth contrast that was entered at the first-level analysis</label>
+    <span id="option1" class="answer incorrect">Incorrect! The <code>cope1.feat</code> directory contains the results for the first
+  contrast at the subject level, which in this case is <i>semantic &gt;
+  lines</i>.</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>The mean for subject 5 for the first contrast that was entered at the first-level analysis</label>
+    <span id="option2" class="answer correct">Correct! The <code>cope1.feat</code> directory contains the results for the first
+  contrast at the subject level, which in this case is <i>semantic &gt;
+  lines</i>.  Within that directory, the individual <code>cope5.nii.gz</code>
+  files represent the second-level contrasts, which in our case correspond to
+  individual subjects.</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>The third group-level statistical result for the first contrast that was entered at the first-level analysis</label>
+    <span id="option3" class="answer incorrect">Incorrect! These are the results from the second-level analysis, so this is an average for an individual subject (specifically in this case for subject 5)</span><br/>
+  </form>
+</div>
+
+  <li> Set the output directory to <code>level_3</code></li>
+
+  <li> Go to the <b>Stats</b> tab and change to <b>Fixed effects</b>. Note
+  that this is <b>NOT</b> recommended for group-level analyses, but we use
+  it here to save time and because we are only analysing five
+  subjects. Normally, mixed effects would be used.</li>
+
+  <li> Use the <b>Model setup wizard</b> to generate a <em>single group
+  average</em> design.</li>
+
+  <li>Press <b>Go</b>!</li>
+</ul>
+
+
+<div class="aside">
+You can look at <code>examples/level_3.gfeat</code> if necessary.
+</div>
+
+<p> Again, this analysis should only take a couple of minutes to run. Wait for
+the result web pages and look at the results. Do they look plausible?
+</p>
+
+<hr/>
+<p class="centred">The End.</p>
+</div>
+</body>
+</html>

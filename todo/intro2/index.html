@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+
+<!-- Start of Practical boilerplate. -->
+<link rel="stylesheet" type="text/css" href="../../../fsl/fsl.css" />
+<link rel="stylesheet" type="text/css" href="../../../fsl/quiz.css">
+<link rel="stylesheet" type="text/css" href="../../../fsl/viz.css">
+
+<script type="text/javascript" src="../../../fsl/quiz.js"></script>
+<script type="text/javascript" src="../../../fsl/showhide.js"></script>
+<script type="text/javascript" src="../../../fsl/viz.js"></script>
+<script type="text/javascript">
+window.onload=function() {
+    setupQuizQuestions();
+    var graphs = document.querySelectorAll(".viz-graph");
+    var parser = new DOMParser;
+    for (var i = 0; i < graphs.length; i++){
+        var div = graphs[i];
+        var dom = parser.parseFromString(div.innerHTML, "text/html");
+        div.innerHTML = Viz(dom.body.textContent);
+        var svg = div.querySelector("svg");
+        svg.setAttribute("width",  "100%");
+    }
+}
+</script>
+<!-- End of Practical boilerplate. -->
+
+<title>Introduction - BET</title>
+</head>
+
+<body>
+<div id="practical">
+<h1 class="centred">Introduction - BET</h1>
+
+<p>This is the verison of the FSL practical adjusted for use in PYM0FM. The data is stored in <co      de>/storage/silver/pym0fm/&lt;type your login here&gt;/fsl_course_data/</code>.</p>
+<p><center>---</center></p>
+
+<p>Brain Extraction is a crucial step in many analysis pipelines -
+particularly for structural analysis involving segmentation, where an accurate
+brain extraction is important.  It is also important for registration, but in
+this case the brain extraction does not have to be highly accurate, and small
+errors are fine. Running BET, to perform the brain extraction, is very easy to
+do, but getting highly accurate results can involve some skill and patience.
+</p>
+
+
+<h2>Contents:</h2>
+
+<dl class="contents">
+
+<dt><a href="#bet">BET basics</a></dt>
+<dd>Explaining the basics of BET brain extraction and how to adjust the
+parameters to cope with difficult images.</dd>
+
+<dt> <a href="#bet_optional">Troubleshooting Brain Extraction
+(optional)</a></dt>
+<dd>Learn how to deal with some more problematic brain extraction cases.</dd>
+
+</dl>
+
+
+<hr/>
+<h2 name="bet_basics">BET basics</h2>
+
+
+<h3>Starting the GUI</h3>
+
+
+<p>Start by opening a terminal and going to the correct directory:</p>
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;type your login here&gt;/fsl_course_data/intro
+</pre>
+
+<p>Most FSL programs can be run from the command-line without using a GUI, by
+typing fully lowercase names (e.g. <code>bet</code>). Many programs also have
+a GUI, which can be started via the
+<code>fsl</code> mini-GUI (type <code>fsl</code>) or by typing a capitalised
+version of the command name (e.g. <code>Bet</code>).
+</p>
+
+<p>(Note that on Mac OS, the command line call to the GUI
+has <code>_gui</code> appended (e.g. <code>Bet_gui</code>), because Macs can't
+distinguish between lower-case and upper-case...)</p>
+
+
+<p>Start the <code class="bash">fsl</code> GUI and click on <b>BET</b>, to see
+how this all works. Now exit both of these GUIs and start the
+<code class="bash">Bet</code> GUI directly from the terminal (note:
+  use <code>&amp;</code> after the command to make it run in the background).
+</p>
+
+
+<h3>Running BET</h3>
+
+
+<p>Using the Bet GUI, set the input file to <code>structural.nii.gz</code>;
+use the right-hand file selector button rather than typing this in by hand as
+it minimises the chances of errors. Turn on various optional outputs (brain
+extracted image, binary brain mask and skull surface image - see Advanced
+Options tab) but leave the other settings as they are. Note that the GUI
+suggests the default output name <code>structural_brain</code>.
+</p>
+
+
+<p>When done click on <b>Go</b> to run BET and then exit the GUI once it's
+done. You will see that when you pressed <b>Go</b> the actual command carried
+out was printed in the terminal; many of the FSL GUIs will do this, in order
+to help you see what's actually going on. Also in the terminal you will
+see <code>Finished</code> appear once BET has finished running (you may need
+to hit return to get a visible prompt back after seeing
+&quot;<code>Finished</code>&quot;). </p>
+
+
+<p> Use <code class="bash">ls -lrt</code> to see what files got created and
+view the various outputs (this sorts the files according to file creation
+date, with the most recent at the bottom, making it very easy to see what the
+most recently created files in a directory are). Note that if this does not
+give any output then your GUI is probably not running in the background, but
+you can still make it run in the background by pressing <code>control
+z</code>, and then typing <code>bg</code> in the terminal (and after this you
+can run the <code>ls</code> command). </p>
+
+
+<h3>Viewing the results</h3>
+
+
+<p>View the brain mask overlaid onto the original image by first loading the
+original image into FSLeyes and then adding the mask image. Change the
+transparency and colour of the overlay so that you can get a better view of
+the success of the brain extraction.  Remember that for registration purposes
+the brain extraction can contain some small errors, but if you were going to
+use it for segmentation purposes then it would need to be much more accurate.
+</p>
+
+
+
+<h3>Varying the fractional intensity threshold parameter (-f)</h3>
+
+
+<p>The usage for the command-line version of <code>bet</code> is:</p>
+
+
+<pre>
+bet &lt;input&gt; &lt;output&gt; [options]
+</pre>
+
+
+<p>where <code>input</code> and <code>output</code> stand for filenames
+and <code>options</code> can be many, or none, of the available extr/a
+options.</p>
+
+<p>You can just type <code class="bash">bet</code> to see the usage
+description (first line of the output) as well as a description of the many
+options available.  Have a look at the command that the GUI printed in the
+terminal when you pressed <b>OK</b> previously, which gives an example
+of how it works. </p>
+
+
+<p>Using the command line, try setting the <code>Fractional intensity
+threshold</code> (the <code>-f</code> option on the command line) to 0.2 and
+0.8, in turn, to see the effect it has (save these with different output image
+names and load both into FSLeyes). This option controls the threshold that
+distinguishes brain from non-brain; if you reduce it from the default value of
+0.5 then the brain estimate gets larger, and vice versa.
+</p>
+
+
+<hr />
+<h2><a name="bet_optional">Troubleshooting Brain Extraction (optional)</a></h2>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;type your login here&gt;/fsl_course_data/intro
+</pre>
+
+
+<p>This part of the practical is optional, but you are encouraged to do it in
+the session, if you have time, or outside of the session.  The objective is to
+learn how to deal with some more problematic brain extraction cases (which are
+relatively common with images that have large FOV and/or substantial bias
+field - so this is a highly useful skill).</p>
+
+
+<h3>Using the gradient threshold option (-g)</h3>
+
+
+<p>Run BET on <code>sub3m0</code>. Note that the cerebellum is
+underestimated. We can improve this by changing the gradient threshold
+<code>-g</code> (from its default of 0) to 0.5. This option causes the
+overall fractional threshold (controlled globally by <code>-f</code>)
+to vary linearly with slice number - to get smaller at the bottom and
+bigger at the top, or vice versa. Run this and note that we have now
+underestimated the top slices! However by combining the gradient
+option with the main (<code>-f</code>) option we can get a good
+overall result: try <code>-f 0.3 -g 0.2</code> (or maybe you can
+do even better!).</p>
+
+
+<h3>Dealing with large FOV images</h3>
+
+
+<p>The final example is of a head image with a large amount of neck
+present - run BET on <code>bighead</code> to see a problem. Because of
+the neck, the initial brain surface is initialised too low in the
+image. There are several ways to deal with this:
+<ol>
+  <li> crop your image first to remove the neck</li>
+  <li> provide an estimate of the centre of the brain</li>
+  <li> use other BET options that might be more robust</li>
+</ol>
+</p>
+
+<p>Cropping the image can be performed manually using
+  <code>fslroi</code> but is easier using the automated tool
+  <code>robustfov</code>.  For example:</p>
+
+
+<pre class="bash">
+robustfov -i bighead -r bighead_crop
+</pre>
+
+
+<p>Run this command and look at the output image. It is then possible to
+run <code>bet</code> directly on this cropped image (try it and see how it
+performs).</p>
+
+
+<div class="aside">
+It is also possible to crop images directly in FSLeyes: <em>Tools &gt; Crop</em>.
+</div>
+
+
+<p>The second option, which leaves the large FOV, is to set the initial centre
+by hand via the <code>-c</code> option on the command line.  Try this out
+using FSLeyes to get a rough guess (in voxels) of where the centre of the
+brain is in the image and use the values when you call bet with
+the <code>-c</code> option.  Check the output and see whether it improves.
+</p>
+
+
+<p>The third option, that can work better in some cases is to use the
+automatic <code>-R</code> option; this re-runs BET several times, each
+starting its brain centre at the centre of the previously-estimated brain. Try
+  the <code>-R</code> option instead of the <code>-c</code> option above.</p>
+
+
+<p>In general our recommendation is to combine the cropping and
+the <code>-R</code> option, as we have found this to be quite robust on a
+range of images.  However, it may not work on all images, which is why there
+are a variety of options, as some types of images work better with one
+strategy than with another. Therefore it is good to be familiar with a range
+of options.</p>
+
+
+<hr/>
+<p class="centred">The End.</p>
+</div>
+</body>
+</html>

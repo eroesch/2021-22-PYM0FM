@@ -1,0 +1,17 @@
+div.viz-graph {
+    width            : 90%;
+    margin           : auto;
+    border           : 1px solid black;
+    background-color : #ffffdd;
+    padding          : 10px;
+    border-radius    : 10px;
+}
+
+div.viz-graph svg g polygon {
+    fill : none;
+}
+
+div.viz-graph g g.node polygon {
+
+    fill : #ffffbb;
+}

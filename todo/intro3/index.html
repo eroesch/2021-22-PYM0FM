@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+
+<!-- Start of Practical boilerplate. -->
+<link rel="stylesheet" type="text/css" href="../../../fsl/fsl.css" />
+<link rel="stylesheet" type="text/css" href="../../../fsl/quiz.css">
+<link rel="stylesheet" type="text/css" href="../../../fsl/viz.css">
+
+<script type="text/javascript" src="../../../fsl/quiz.js"></script>
+<script type="text/javascript" src="../../../fsl/showhide.js"></script>
+<script type="text/javascript" src="../../../fsl/viz.js"></script>
+<script type="text/javascript">
+window.onload=function() {
+    setupQuizQuestions();
+    var graphs = document.querySelectorAll(".viz-graph");
+    var parser = new DOMParser;
+    for (var i = 0; i < graphs.length; i++){
+        var div = graphs[i];
+        var dom = parser.parseFromString(div.innerHTML, "text/html");
+        div.innerHTML = Viz(dom.body.textContent);
+        var svg = div.querySelector("svg");
+        svg.setAttribute("width",  "100%");
+    }
+}
+</script>
+<!-- End of Practical boilerplate. -->
+
+<title>Introduction - FSLUTILS</title>
+</head>
+
+<body>
+<div id="practical">
+<h1 class="centred">Introduction - FSLUTILS</h1>
+
+
+To work with FSL, it is essential to become comfortable in working at the UNIX
+command line. This practical introduces some of the more useful FSL command
+line utilities, which allow you to query and manipulate your image files.
+
+
+<h2>Contents:</h2>
+
+<dl class="contents">
+
+<dt><a href="#fslutils">FSLUTILS</a></dt>
+<dd>An introduction to working with images on the command line (typing in the
+terminal), for doing things like making image measurements and carrying out
+  basic maths on images.</dd>
+
+<dt> <a href="#fslutils_optional">More FSLUTILS (optional)</a></dt>
+<dd>Learn how to use <code>fslsplit</code>, <code>fslmerge</code>
+  and <code>fslroi</code> (for breaking apart images, putting them back
+  together and extracting ROIs). </dd>
+
+</dl>
+
+
+<hr/>
+<h2><a name="fslutils">FSLUTILS</a></h2>
+
+
+<pre class="bash">
+cd ~/fsl_course_data/intro
+</pre>
+
+
+<h3>fslinfo and fslhd</h3>
+
+
+<p>These tools enable various properties of an image to be viewed.</p>
+
+
+<p>Type <code class="bash">fslinfo highres</code>
+and <code class="bash">fslinfo thresh_zstat1</code> and note their different
+image matrix dimensions (dim1-3) and voxel sizes, in mm (pixdim1-3).</p>
+
+
+<p>Note that some images (<code>highres</code>) are of <i>integer</i>
+datatype, while others (<code>thresh_zstat1</code>) are of <i>floating
+point</i> datatype. Integer means that the intensity values can only take on
+whole numbers - no fractions - raw image data is normally of this
+type. Floating point means that intensity values can be fractional - the
+result of applying most statistical processing algorithms to image data
+results in images of floating point type.</p>
+
+
+<p>Also try running <code class="bash">fslhd</code> on these files. This
+provides much more detailed information about the images.  Don't worry if you
+don't know what every field means.</p>
+
+
+<hr/>
+<h3>fslstats</h3>
+
+
+<p><code>fslstats</code> is a general tool for calculating various
+values/statistics from the image intensities.  It is quite flexible but we
+will just illustrate some basic uses here. Type
+<code class="bash">fslstats</code> to see the full list of possible
+options and brief description of the output. Any combination and order of
+options is possible.</p>
+
+
+<p>Run </p>
+
+<pre class="bash">
+fslstats highres -R -r
+</pre>
+
+
+<p>The first pair of numbers (specified by <code>-R</code>) is the absolute
+range of the data - i.e., the min and max intensities. The second pair
+(<code>-r</code>) is the &quot;robust range&quot; - i.e. the min and max if
+the outer tails of the intensity distribution are ignored (this is useful if
+the data contains outliers). View the image histogram in FSLeyes to see how
+all these numbers relate to the histogram.</p>
+
+
+<p>Slightly confusingly, the robust range doesn't seem to be doing the same
+thing for the left and right tails. This is because there are lots of empty
+voxels in the image (because the data has been brain-extracted) that are
+affecting the calculation. Click on the spanner button
+(<img src="spanner_icon.png" class="icon"/>) on the histogram toolbar, expand
+the <b>Histogram settings for selected overlay</b> section, un-check the
+<b>Ignore zeros</b> setting, and enter <code>-1</code> for the minimum 
+<b>Data range</b> bound. See how the histogram is affected.</p>
+
+
+<p>Run:</p>
+
+
+<pre class="bash">
+fslstats highres -m -M
+</pre>
+
+
+
+<p>The first number is the mean intensity of all voxels in image, whilst the
+second is the mean of only the non-zero voxels. The first is much lower
+because of all the zero background voxels dragging down the mean. The second
+number is a more meaningful mean of the actual within-brain intensities - view
+the image and click around inside the brain to see this.</p>
+
+
+<hr/>
+<h3>fslmaths</h3>
+
+
+<p><code>fslmaths</code> is a very general image calculator and can be used to
+perform a great variety of manipulations of images.  See the (long) usage by
+just typing <code class="bash">fslmaths</code>.  Don't worry about
+understanding it all at this point, we will illustrate some basic uses here,
+but be aware that it is a very general and powerful tool that is worth getting
+to know.</p>
+
+
+<p>As a very simple example, we will find the difference between two
+consecutive timepoint images (the images are extracted from a functional
+dataset, and this difference calculation might be used as part of a quality
+assessment). Do this by running:</p>
+
+
+<pre class="bash">
+fslmaths image0 -sub image1 imdiff
+</pre>
+
+
+<p>and view the output (the final argument in that command) in FSLeyes. Now
+calculate this as a percent difference image by running:</p>
+
+
+<pre class="bash">
+fslmaths imdiff -div image0 -mul 100 imdiffpercent
+</pre>
+
+
+<p>This means: &quot;take the difference image, divide by the first of the
+original images (voxelwise), multiply by 100, and output&quot;. View the
+output in FSLeyes, and then use <code>fslstats</code> to calculate its
+absolute and robust range - see that the robust range is quite small, with
+most change showing up as motion effects round the edge of the brain.</p>
+
+
+<p> Make sure that you understand the <code>fslmaths</code> commands above;
+and note that in general an &quot;input&quot; can be a number instead of an
+image (the &quot;<code>100</code>&quot; could have been an image name
+instead). This does not apply to the first input in the command!</p>
+
+<hr/>
+<h3>Combining fslmaths and fslstats</h3>
+
+
+<p> Now let's consider another example where we need both
+<code>fslmaths</code> and <code>fslstats</code>.  In this example we will take
+a probabilistic ROI of the left Thalamus (already transformed from a
+standard-space atlas) and quantify some characteristics of the thresholded
+fMRI activations that we viewed earlier.  This will involve making an
+appropriate binary mask and then using this with <code>fslstats</code>.
+</p>
+
+
+<p>If you view the image <code>LThal_mask_func</code> in FSLeyes (best if
+loaded on top of the <code>example_func</code> image) you will see that it
+contains values between 0 and 1, representing the probability that each voxel
+is part of the thalamus.  To use this as a mask it is necessary to turn it
+into a binary image (where each voxel contains either 0 or 1 but no numbers in
+between).  This requires choosing a threshold value and then applying this in
+<code>fslmaths</code> to make a binary image.  Let us choose 0.5 (i.e. 50&#37;
+probability) as the threshold, and apply it with this command:
+
+
+<pre class="bash">
+fslmaths LThal_mask_func -thr 0.5 -bin LThal_mask_func_bin
+</pre>
+
+
+<br>After running this load the output image in FSLeyes and see what it has
+done to the mask, particularly at the edges.</p>
+
+
+<p>We can now use this mask with <code>fslstats</code> to extract the size of
+the ROI, the size of the overlap with the thresholded statistic map and the
+average value of the statistics within this ROI.  These can be calculated with
+the following commands:</p>
+
+<pre class="bash">
+fslstats LThal_mask_func_bin -V
+fslstats thresh_zstat1 -k LThal_mask_func_bin -V
+fslstats thresh_zstat1 -k LThal_mask_func_bin -M
+</pre>
+
+
+<p>See if you understand what each command does and what the output means. If
+not, look at the usage for <code class="bash">fslstats</code>, by typing it on
+its own at the command line and pressing return.  If it still isn't clear then
+ask one of the tutors.</p>
+
+<p>Note that in the last command the <code>-M</code> option was used (as
+opposed to <code>-m</code>) to ensure that the average is only within the area
+where the thresholded stats are non-zero inside the ROI.</p>
+
+
+<p> Becoming familiar with <code>fslmaths</code> and <code>fslstats</code> can
+save you a huge amount of time when you want to carry out simple image
+manipulations quickly. Also, if you want to carry out simple things many
+times, you can easily put these commands into small scripts (text files that
+contain the same commands that you might type in the terminal). We cannot
+emphasise strongly enough how useful it can be to learn these basic
+command-line programs, and also basic scripting. (Unfortunately you will
+probably not have time during the course to go through the scripting practical
+- there's just too much stuff to fit in! - but we do recommend that you have a
+look at it after the course, at least the first few basic sections).</p>
+
+
+
+<hr />
+<h2><a name="fslutils_optional">More FSLUTILS (optional)</a></h2>
+
+
+<h3>fslsplit and fslmerge</h3>
+
+
+<p>The following exercises are intending to teach you how to use the
+tools <code>fslsplit</code>, <code>fslmerge</code> and <code>fslroi</code>.
+The examples represent some situations that can be encountered in practice,
+but the scope of these tools goes way beyond these specific examples.
+Familiarity with these basic tools can help in getting data into the right
+format for analysis, in case it is not that way to begin with (which is more
+common than you might think) or give you ways of looking at original or
+processed data in different ways.
+</p>
+
+
+<p>In this example we will look at a way of separating a diffusion sequence
+into diffusion-weighted and non-diffusion-weighted parts.  To start with,
+check how many timepoints there are in the diffusion-weighted
+acquisition <code>diffdata</code> using <code>fslinfo</code> and then run:</p>
+
+
+<pre class="bash">
+fslsplit diffdata
+</pre>
+
+
+<p>to split up the 4D input image into its individual 3D images, or volumes,
+(<code>vol0000, vol0001, vol0002,</code> etc.).  To list these new files
+do:</p>
+
+
+<pre class="bash">
+ls vol*
+</pre>
+
+
+<p>(note that the <code>*</code> is expanded by the terminal to fit any
+characters in all possible filenames present, and so can be used in any
+commands, not just <code>ls</code>, as we will see below). You'll see that the
+counting of the images starts with 0, and that the number of images should
+match the number of timepoints in the original 4D image.</p>
+
+
+<p>In this diffusion sequence, as in most, there are several
+non-diffusion-weighted scans (the &quot;b=0&quot; scans) which show up as very
+bright in the diffusion sequence (try viewing <code>diffdata</code> in the
+movie mode of FSLeyes).  So we will separate this data into two 4D images: one
+containing just non-diffusion-weighted scans and one containing the
+diffusion-weighted scans.  This is not always necessary for analysis of
+diffusion data, but can be helpful for visualisation of input and processed
+data. </p>
+
+
+<p>In this sequence there are 4 non-diffusion scans: numbers 0, 16, 32 and 48,
+with the counting starting at zero, just like in FSLeyes and consistent with
+how <code>fslsplit</code> numbers things.  These numbers could be found from
+the <code>bvals</code> file, or by looking at the data in FSLeyes, but here we
+are giving them to you. </p>
+
+
+<p>The easiest way to separate the two sets is just to rename the
+non-diffusion volumes, using the UNIX <code>mv</code> command like this:</p>
+
+
+<pre class="bash">
+mv vol0000.nii.gz b0vol0000.nii.gz
+</pre>
+
+
+<p>and doing the equivalent for <code>vol0016.nii.gz, vol0032.nii.gz</code>
+and <code>vol0048.nii.gz</code>.  Note that because <code>mv</code> is not a
+specific FSL command it is absolutely essential to include
+the <code>.nii.gz</code> part of the filenames (whereas for FSL commands it
+doesn't matter if these are included or left out).</p>
+
+
+<p>Check that these files have been renamed correctly by looking at the
+directory contents using <code>ls</code>. Now remerge the remaining
+diffusion-weighted 3D images into a new 4D image with:</p>
+
+
+<pre class="bash">
+fslmerge -t dwidata vol*
+</pre>
+
+
+<p>The <code>-t</code> tells <code>fslmerge</code> to merge the images in time
+(<code>fslmerge</code> is also capable of doing other merges, such as stacking
+them on top of each other in space). After &quot;<code>dwidata</code>&quot;
+(the name of the output image), <code>fslmerge</code> expects a list of images
+to be merged.  As mentioned above, for all FSL commands the image names can be
+used with or without including the filetype extension (extensions
+are <code>.nii.gz .hdr .img </code> etc.).</p>
+
+
+<p>View the resulting image in FSLeyes using the movie loop and check that the
+non-diffusion-weighted scans not part of this new 4D image.  See how much
+easier it is to visualise the data this way.</p>
+
+
+<p>The non-diffusion scans can also be merged into a single 4D image using:</p>
+
+
+<pre class="bash">
+fslmerge -t nodiffdata b0vol*
+</pre>
+
+
+<h3>fslroi</h3>
+
+
+<p>We will now fix an image that is &quot;wrapped&quot;, with the nose sitting
+behind the back of the head, as you sometimes see in poorly planned
+acquisitions ...</p>
+
+
+<pre class="bash">
+fsleyes wrapped &amp;
+</pre>
+
+
+<p>You will use <code>fslroi</code> to split this image into two (front and
+back parts) and <code>fslmerge</code> to remerge them back together in the
+right order. In FSLeyes, look at an inferior (bottom) axial slice so that you
+can work out the y coordinate (in the anterior-posterior direction) where you
+want to make the split.  Record the y-coordinate (in voxels, not mm).
+</p>
+
+
+<p>Now use <code>fslinfo</code> to find out what the image matrix dimensions
+are <code>(dim1,dim2,dim3)</code>. You're now ready to extract the back part
+of the head into a temporary file.  If your y-coordinate was 76 you would do:
+</p>
+
+<pre class="bash">
+fslroi wrapped back 0 256 76 180 0 128
+</pre>
+
+
+<p>Now just type <code class="bash">fslroi</code> to see the usage. There are
+several ways to run <code>fslroi</code>: you can specify just a 3D ROI, as we
+have done here - this is the first of the usage possibilities. The second
+option is to extract a temporal ROI from a 4D dataset (one or more full 3D
+volumes). The final option extracts a 4D ROI from a 4D dataset, controlling
+the region to be extracted in space <i>and</i> time. The program knows which
+option you want from the number of &quot;arguments&quot; that you type. Note
+that if you use the first option (3D ROI) on a 4D input file, the output will
+still be 4D, with the number of timepoints unchanged, and each volume cut down
+in 3D in the same way, as specified by the arguments. </p>
+
+
+<p>Make sure that you understand the exact numbers used in the above command,
+that created the <code>back</code> image; note in particular that the second
+number in each pair is the <em>length</em> of the ROI in the relevant
+dimension, not the <em>end point</em> - the <code>&lt;ysize&gt;</code> was 180
+(256-76) not 256. </p>
+
+
+<p>Now work out how to run a similar command to create
+&quot;<code>front</code>&quot;, from the back part of <code>wrapped</code>.
+</p>
+
+
+<p>Use <code>fslmerge</code> to merge <code>front</code> and
+<code>back</code> together correctly, and verify with FSLeyes.  You
+could also do a similar thing with the slight wraparound at the top of
+the image. </p>
+
+
+<p>As a last example, we will use <code>fslstats</code> to determine an ROI to
+use with <code>fslroi</code>.  To do this run:</p>
+
+
+<pre class="bash">
+fslstats highres -w
+</pre>
+
+
+<p>which will generate a set of numbers suitable for <code>fslroi</code>.
+This ROI is the smallest ROI possible that fully contains all non-zero voxels.
+We could now run <code>fslroi</code> using these numbers, but instead we'll
+combine the two commands into one, using the unix trick of putting a command
+within <code>`</code> quote marks (this is the backquote, not the usual
+forward quote!). When you put a command within these quote marks then this
+part of a larger command will get replaced by the text output of the command
+within quotes. We will cut down <code>highres</code> so that the image <i>just
+about</i> contains the brain, and the end slices that only contain zeros are
+thrown away. Run the following, and then try to understand how it works:.</p>
+
+
+<pre class="bash">
+fslroi highres highres_roi `fslstats highres -w`
+</pre>
+<p/>
+
+
+<div class="aside">
+  Another UNIX trick - the back-slash character
+  (&quot;<code>&#92</code>&quot;) in the <code>fsleyes</code> command here
+  allows you to split a long command across multiple lines to make it easier
+  to read.
+</div>
+
+
+<p>You can see what fslroi has done by overlaying the two images in
+  FSLeyes:</p>
+
+
+<pre class="bash">
+fsleyes highres -cm red-yellow -dr -1 16000 \
+  highres_roi -cm blue-lightblue -dr -1 16000
+</pre>
+
+
+<hr/>
+<p class="centred">The End.</p>
+</div>
+</body>
+</html>
