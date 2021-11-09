@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+
+<!-- Start of Practical boilerplate. -->
+<link rel="stylesheet" type="text/css" href="../fsl/fsl.css" />
+<link rel="stylesheet" type="text/css" href="../fsl/quiz.css">
+<link rel="stylesheet" type="text/css" href="../fsl/viz.css">
+
+<script type="text/javascript" src="../fsl/quiz.js"></script>
+<script type="text/javascript" src="../fsl/showhide.js"></script>
+<script type="text/javascript" src="../fsl/viz.js"></script>
+<script type="text/javascript">
+window.onload=function() {
+    setupQuizQuestions();
+    var graphs = document.querySelectorAll(".viz-graph");
+    var parser = new DOMParser;
+    for (var i = 0; i < graphs.length; i++){
+        var div = graphs[i];
+        var dom = parser.parseFromString(div.innerHTML, "text/html");
+        div.innerHTML = Viz(dom.body.textContent);
+        var svg = div.querySelector("svg");
+        svg.setAttribute("width",  "100%");
+    }
+}
+</script>
+<!-- End of Practical boilerplate. -->
+
+
+<title>Registration Practical</title>
+</head>
+
+
+<body>
+<div id="practical">
+
+
+<h1 class="centred">Registration Practical</h1>
+
+<p>In this practical you will explore each of the registration steps within a
+standard two-step registration for functional images. We will first learn to
+use the registration tools within the FEAT GUI. Then we will see how to apply
+and invert transformations. Being able to achieve precise registrations is
+CRUCIAL for structural, functional and diffusion image analysis. If
+registrations are not accurate, further statistics at a structural or group
+level will not be accurate.</p>
+
+
+<h2>Contents:</h2>
+<dl class="contents">
+
+  <dt> <a href="#featreg">1: Two-stage Registration and Unwarping with
+  FEAT</a></dt>
+  <dd>Register functional EPI images to the individual structural image and to
+    standard space using the FEAT GUI. This includes fieldmap-based unwarping
+    and the preparation of these fieldmap scans.
+  </dd>
+
+  <dt> <a href="#applying">2: Applying and Inverting Transformations</a></dt>
+
+  <dd>Calculate and apply transforms and inverses from linear and non-linear
+    registration (as output from FEAT). This provides experience in
+    transforming masks (or other images) between the different "image spaces"
+    (functional, structural, standard). The same principles apply for
+    registration in diffusion imaging, and the similarities and differences
+    are highlighted here.</dd>
+
+  <dt> <a href="#multiband">3: Optional extra: Multiband data registration</a></dt>
+
+  <dd>Include an extra registration step to register (low-contrast) multiband data. Many of you may not need to complete this section, but for those of you collecting multiband data this may be a helpful exercise. An extra (high-contrast) image is added as an intermediate step when registering between a functional EPI image and a structural image.</dd>
+</dl>
+
+
+<hr/>
+<h2><a name="featreg">Two-stage Registration and Unwarping with FEAT</a></h2>
+
+
+<p>Take a look inside the data directory:</p>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration
+ls
+</pre>
+
+
+<p>This directory contains the following images:</p>
+
+<ol>
+<li>A structural scan: <code>STRUCT.nii.gz</code></li>
+<li>A functional scan: <code>FUNC.nii.gz</code></li>
+<li>A magnitude fieldmap image: <code>FMAP_MAG.nii.gz</code></li>
+<li>A phase fieldmap image: <code>FMAP_PHASE.nii.gz</code></li>
+<li>A text file containing the fieldmap
+  information: <code>FMAPS.txt</code></li>
+<li>A folder containing an example registration (<code>EXAMPLE_REG</code> -
+  we will use this a bit later)</li>
+<li>A folder containing data for the optional section (<code>multiband_data</code>)</li>
+</ol>
+
+
+<p>The objective of this practical is to become familiar with how to perform
+and evaluate the results of registration in the FEAT GUI (the main functional
+analysis GUI). This involves multi-stage registration and fieldmap-based
+unwarping, and requires the images to be suitably prepared. Registration in
+other FSL GUIs (e.g. for ICA or diffusion analysis) works very similarly.</p>
+
+
+
+<h3>Preparing the structural image</h3>
+
+
+<p>We need to perform brain extraction on the structural image prior to using
+it for registration (as explained in the lecture). To do this run BET on the
+image <code>STRUCT.nii.gz</code>, and save the result
+as <code>STRUCT_brain.nii.gz</code>. Check the results with FSLeyes.</p>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="Input image
+(STRUCT.nii.gz)"];
+  2 [label="Options (e.g. -m)"];
+  3 [label="BET"];
+  4 [label="Brain Extracted Image
+(STRUCT_brain.nii.gz)"];
+  5 [label="Brain Mask
+(STRUCT_brain_mask.nii.gz)"];
+  6 [label="..."];
+
+  1 -> 3;
+  2 -> 3;
+  3 -> 4;
+  3 -> 5;
+  3 -> 6;
+}
+</div>
+
+
+<h3>Fieldmap images</h3>
+
+
+<p>There are two images that the Siemens scanner saves from a fieldmap
+sequence. These are (in this case, renamed nicely for you):</p>
+
+
+<pre class="listing">
+FMAP_MAG.nii.gz
+FMAP_PHASE.nii.gz
+</pre>
+
+
+<p>where the first image represents the standard magnitude image from the fieldmap acquisition, and the second image represents a phase difference (between two different echo times, calculated internally as part of the fieldmap acquisition). The second image is proportional to a map of the distortions. Have a quick look at these with FSLeyes. We will need to use both magnitude and phase images.</p>
+
+
+<h3>Processing the fieldmap magnitude image</h3>
+
+<div class="aside">
+Typically the magnitude image will have 2 volumes and will need to be reduced to 1 volume before using BET. You can use fslroi to do this.
+</div>
+
+
+<p>We will start by brain extracting the first magnitude image. Run brain
+extraction on the magnitude image and save the result
+as <code>FMAP_MAG_brain.nii.gz</code>. We will then erode this image (shaving
+off one voxel from all edges) as this image contains noisy partial volume
+voxels in the phase difference image near the edge of the brain (you will see
+this below, whereas in practice you would look first in order to decide
+whether to erode or not). To do the erosion we run:</p>
+
+
+<pre class="bash">
+fslmaths FMAP_MAG_brain -ero FMAP_MAG_brain_ero
+</pre>
+
+
+<p>This performs an erosion operation (stripping one voxel from the edge) with
+the general tool <code>fslmaths</code> which acts as an image calculator,
+taking input images and performing operations on them and then saving them as
+a new image (the last name specified). Check what the results look like in
+FSLeyes: </p>
+
+
+<pre class="bash">
+fsleyes FMAP_MAG -cm greyscale \
+  FMAP_MAG_brain -cm red-yellow \
+  FMAP_MAG_brain_ero -cm blue-lightblue &amp;
+</pre>
+
+
+<p>Add the phase (FMAP_PHASE.nii.gz) to the viewer to see why we needed to
+erode the brain in order to avoid the noisy voxels at the edge.
+Note that the &quot;lost&quot; voxels will have fieldmap values filled in
+by extrapolating from the nearest voxel inside the mask, which is quite
+accurate for fieldmaps as the field variations are quite smooth (you cannot
+see this in these images as it happens in the later processing).</p>
+
+
+<h3>Processing the fieldmap phase difference image</h3>
+
+
+<p>Here we need to take this raw scanner output, which is scaled in a strange
+way (0 to 360 degrees are mapped to 0 to 4096), and convert it into radians
+per second image (this is equivalent to an image in Hz multiplied by
+2*pi). For this we need the phase difference image, the brain extracted (and
+eroded) magnitude image and the difference in the echo times of the fieldmap
+acquisitions. This latter value is 2.46ms and can be found in the text
+file <code>FMAPS.txt</code>, which is conveniently given here but will not
+exist normally. Therefore it is important to record this echo time difference
+when you scan (your scanner operator will be able to give you the value, and
+although it can usually be determined later on, it is much easier to record it
+  at the time when the scanner operator is present).</p>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="<FONT>Fieldmap phase image</FONT><BR ALIGN="CENTER"/><FONT
+  COLOR="red">(FMAP_PHASE.nii.gz)</FONT>>"];
+  2 [label="Fieldmap magnitude image
+  (FMAP_MAG_brain_ero.nii.gz)"];
+  3 [label="Difference in echo times"];
+  4 [label="Fsl_prepare_fieldmap
+  (GUI or command line)"];
+  5 [label="Output Fieldmap (in radians/sec)
+  (FMAP_RADS.nii.gz)"];
+
+  1 -> 4;
+  2 -> 4;
+  3 -> 4;
+  4 -> 5;
+}
+</div>
+
+
+<p>Armed with this information, all we need to do is run the GUI
+called <code class="bash">Fsl_prepare_fieldmap</code>. Note that these images
+come from a Siemens scanner. Set up all the information required in the GUI,
+(phase image is <code>FMAP_PHASE.nii.gz</code> and the brain extracted
+magnitude image is <code>FMAP_MAG_brain_ero.nii.gz</code>) calling the
+output <code>FMAP_RADS</code>, and press <b>Go</b>.  View the output with
+FSLeyes and check that most of the brain has small values (less than 200
+rad/s) while in the inferior frontal and temporal areas the values are larger
+(either large and positive or large and negative).</p>
+
+
+<hr/>
+<h3>Using the FEAT GUI</h3>
+
+
+<p>With the fieldmap processed and the structural image brain extracted we are
+now ready to use the FEAT GUI for registration. Note that the
+&quot;unwarping&quot; of images using fieldmaps is done in
+the <b>Pre-stats</b> tab of the FEAT GUI.</p>
+
+
+<p>Start the FEAT GUI by typing <code>Feat</code> in the terminal. From the
+drop-down list in the top right corner select <b>Preprocessing</b>. We now
+  need to set up the GUI to run our registration with unwarping.</p>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="Functional image
+(FUNC.nii.gz)"];
+  2 [label="Structural image
+(STRUCT.nii.gz)"];
+  3 [label="Fieldmap image
+(FMAP_RADS.nii.gz)"];
+  4 [label="Parameters (of FMRI acquisition)"];
+  8 [label="Distortion Correction and Registration
+  (BBR)"];
+  9 [label="Undistorted and registered functional image
+(example_func2highres.nii.gz)"];
+  10 [label="Nonlinear spatial transformation: Distorted FMRI to structural
+(example_func2highres_warp.nii.gz)"];
+  11 [label="Linear spatial transformation: Undistorted FMRI to structural
+(example_func2highres.mat)"];
+  1 -> 8;
+  2 -> 8;
+  3 -> 8;
+  4 -> 8;
+  8 -> 9;
+  8 -> 10;
+  8 -> 11;
+}
+</div>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  12 [label="Structural image
+(structural.nii.gz)"];
+  13 [label="Standard Template: e.g. MNI
+(standard.nii.gz)"];
+  14 [label="Linear Registration
+(FLIRT)"];
+  15 [label="Linear transformation
+(highres2standard.mat)"];
+  16 [label="Nonlinear Registration
+(FNIRT)"];
+  17 [label="Registered Image
+(highres2standard_warp.nii.gz)"];
+  18 [label="Nonlinear transformation
+(highres2standard_warp.nii.gz)"];
+  12 -> 14;
+  13 -> 14;
+  14 -> 15;
+  15 -> 16;
+  12 -> 16;
+  13 -> 16;
+  16 -> 17;
+  16 -> 18;
+}
+</div>
+
+
+<!--  OLD VERSION
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="example_func.nii.gz"];
+  2 [label="structural.nii.gz"];
+  3 [label="FMAP_RADS.nii.gz"];
+  4 [label="Effective echo spacing"];
+  5 [label="EPI TE"];
+  6 [label="Unwarp direction"];
+  7 [label="Signal loss threshold"];
+  8 [label="BBR"];
+  9 [label="example_func2highres.mat"];
+  10 [label="example_func2highres_warp.nii.gz"];
+  11 [label="example_func2highres.nii.gz"];
+  12 [label="highres.nii.gz"];
+  13 [label="standard.nii.gz"];
+  14 [label="FLIRT"];
+  15 [label="highres2standard.mat"];
+  16 [label="FNIRT"];
+  17 [label="highres2standard_warp.nii.gz"];
+  18 [label="example_func2standard_warp.nii.gz"];
+
+  1 -> 8;
+  2 -> 8;
+  3 -> 8;
+  4 -> 8;
+  5 -> 8;
+  6 -> 8;
+  7 -> 8;
+  8 -> 9;
+  8 -> 10;
+  8 -> 11;
+  2 -> 12;
+  12 -> 14;
+  13 -> 14;
+  14 -> 15;
+  15 -> 16;
+  13 -> 16;
+  16 -> 17;
+  10 -> 18;
+  17 -> 18;
+}
+</div>
+!-->
+
+
+<p>We will start with the main <b>Data</b> tab.  To begin with click on the
+<b>Select 4D data button</b> and select the image
+<code>FUNC.nii.gz</code>. Once this is done, click on the file browser
+for the <b>Output directory</b> and make sure the directory is set to
+somewhere in your home directory. Then, in
+the <b>Selection</b> box at the bottom type &quot;<code>test_reg</code>&quot;
+and press <b>OK</b> (if you leave it empty, it would normally default to something like
+<code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/FUNC.feat</code>). </p>
+
+
+<p>Now go to the <b>Pre-stats</b> tab and click the <b>B0 unwarping</b>
+button. Note that all other parts of this tab (e.g. motion correction) are set
+to their default values and we will leave them with these settings. Now go
+through and populate the relevant parts:</p>
+
+<ul>
+  <li><b>Fieldmap</b>: <code>FMAP_RADS</code> (select this using the file
+    browser that the folder icon opens)</li>
+  <li><b>Fieldmap mag</b>: <code>FMAP_MAG_brain</code></li>
+  <li><b>Effective EPI echo spacing</b>: 0.49ms (taken from
+    the <code>FMAPS.txt</code> file here, but in general you need to take note
+    of this value when scanning - ask your operator - and if you are using
+    parallel acceleration then it needs to be divided by the acceleration
+    factor).</li>
+  <li><b>EPI TE</b>: 30ms</li>
+  <li><b>Unwarp direction</b>: &quot;-y&quot (again your operator can tell you
+    whether the unwarp direction, or phase encode direction, is x, y or z, but
+    whether it is + or - needs to be determined, currently, by trial and
+    error, which has already been done here)</li>
+  <li><b>&#37; Signal loss threshold</b>: Leave at the default value of
+  10&#37;.</p>
+</ul>
+
+
+<p>Go to the <b>Registration</b> tab and click on the <b>Main structural
+image</b> button. Open the file browser and
+select <code>STRUCT_brain</code>. Make sure the options underneath are set to
+<em>Normal search</em> and <em>BBR</em>. In the <b>Standard space</b> box,
+make sure the image <code>MNI152_T1_2mm_brain</code> is selected in the correct directory.
+(This reference image is part of FSL. In general, to find out where FSL is
+installed, type <code>echo $FSLDIR</code> into a terminal. The standard space
+reference images are in <code>data/standard/</code> inside that directory.)
+We will not select the <em>Nonlinear</em> button in the <b>Standard space</b>
+section for this part of the practical in order to save time, but you normally
+would use this setting as it gives the best results.</p>
+
+
+<p>OK, that's everything we need to register the functional image to standard
+space. So double-check that the <b>Pre-stats</b> and <b>Registration</b> tabs
+look correct and when you are happy press the <b>Go</b> button at the
+bottom. This should start up a web browser showing the progress of FEAT -
+although it may take a minute for this to appear.</p>
+
+
+<p>Now go back to the FEAT GUI, and we are going to run a comparison
+registration <em>without fieldmap unwarping</em>. So go to
+the <b>Pre-stats</b> tab and de-select the <b>B0 unwarping</b> button. In
+the <b>Data</b> tab, re-name the output to something like
+<code>test_reg_no_fmap</code>. Everything else stays the same, and once you
+are happy with all the setting press the <b>Go</b> button again.</p>
+
+
+<hr/>
+<h3>While you wait</h3>
+
+
+<p>The FEAT jobs will take about 15 minutes to finish. In the meantime we can
+have a look at the registrations provided in the <code>EXAMPLE_REG</code>
+subject directory. Change to this directory, and open the webpage report for
+the registration:</p>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/example_reg.feat
+firefox report_reg.html &amp;
+</pre>
+
+
+<p>Look carefully at the results of the registrations in the web page report
+and in the <b>Unwarping</b> page for the cases where fieldmap-based correction
+was run. Do these registrations seem accurate to you? Note that you should not
+trust borders with signal loss areas as these are not true anatomical
+boundaries but artificial borders.</p>
+
+
+<p>It is also highly recommended to use FSLeyes to look in more detail. We can
+look at each of the two registration steps separately (functional to
+structural, and structural to standard), but remember when these two steps are
+combined to produce a functional to standard transformation, the functional
+image is only resampled ONCE into standard space. Let's first look at the
+initial registration step (functional to structural) in FSLeyes. Load the
+structural image into FSLeyes using the following command:</p>
+
+
+<pre class="bash">
+cd reg
+fsleyes highres.nii.gz &amp;
+</pre>
+
+
+<p><span class="note">This <code>highres.nii.gz</code> image is created in
+the <code>reg</code> folder by FEAT from the T1 structural image we
+specified.</p>
+
+
+<p>Using the FSLeyes GUI, add the <code>example_func2highres.nii.gz</code>
+image (<code>example_func</code> is a distortion-corrected example volume from
+the EPI/functional data, and <code>example_func2highres</code> is
+the <code>example_func</code> image transformed into structural space), and
+the <code>example_func2highres_fast_wmedge.nii.gz</code> (this image shows the
+location of the white matter edges, as defined by the highres image). Change
+the colour map of this <code>wmedge</code> image, by selecting in the image
+list at the bottom left, and then selecting <em>Red</em> in the colour map
+drop down list at the top of the FSLeyes window.</p>
+
+
+<p>Click around the image to see where the registration is particularly good
+(as the red edges derived from the structural should align with the changes
+the in greyscale intensities of the functional image). Toggle the visibility
+of the <code>example_func2highres</code> image on and off (the
+<img src="eye_icon.png" class="icon"/> button), or adjust its transparency
+(the <em>Opacity</em> slider in the display toolbar at the top of the FSLeyes
+GUI) to judge its alignment to the <code>highres</code> image.</p>
+
+
+<p>Feel free to look at other images in this <code>reg</code> subdirectory or
+in the <code>unwarp</code> subdirectory inside this.  For example, the
+uncorrected registration result is in the
+file <code>unwarp/example_func_distorted2highres.nii.gz</code> and can be
+viewed separately or added to the FSLeyes session above.</p>
+
+
+<p>Now open another FSLeyes session (without closing the old one) from the
+terminal to view the second registration step (structural to standard):</p>
+
+
+<pre class="bash">
+fsleyes standard.nii.gz &amp;
+</pre>
+
+
+<p>Add the <code>highres2standard.nii.gz</code> image, which is the structural
+image transformed into standard space. In this case non-linear registration
+(FNIRT) was used after affine linear transformation (FLIRT) for maximum
+accuracy. Use the same FSLeyes tools to check the registration of the
+structural image to the standard image.</p>
+
+
+<p>Leave both of these FSLeyes sessions open for the moment, as we are now
+going to compare the registrations you just ran to these given examples.</p>
+
+
+<hr/>
+<h3>Once the FEAT job is finished</h3>
+
+
+<p>Firstly, look at your webpage reports for the registrations you ran. Can you spot any noticable differences compared to the example registration webpage report? We will now compare these registrations carefully using FSLeyes.</p>
+
+
+<p>Go back to the FSLeyes window where you were looking at the first
+registration step (functional to structural). Now add
+the <code>example_func2highres.nii.gz</code> image from the registration you
+ran with fieldmap correction
+(<code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/test_reg.feat/reg/example_func2highres.nii.gz</code>).
+How does this registration compare to the original? It should be identical, or
+at least very, very similar.</p>
+
+
+
+<p>Now add the registration you ran <b>WITHOUT</b> fieldmaps
+(<code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/test_reg_no_fmap.feat/reg/example_func2highres.nii.gz</code>).
+You may wish to rename this image within FSLeyes to something like
+<code>example_func2highres_no_fmap.nii.gz</code> to avoid confusion (as
+FSLeyes will initially give both images the same name). Use the FSLeyes tools
+you practised earlier to compare the registrations with and without
+fieldmaps</p>
+
+
+<div class="quiz_question">
+
+  <span class="question">Which areas likely benefit the most from fieldmap
+    distortion correction?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio"
+    name="answer"/><label>Visual cortex</label>
+    <span id="option1" class="answer incorrect">Incorrect. The visual cortex
+    doesn't usually suffer from as much distortion as other areas of the brain
+    as it is further away from unusual bone/air interfaces, such as the
+      sinuses.</span><br/>
+
+    <input id="option2" class="option" type="radio"
+    name="answer"/><label>Prefrontal cortex</label>
+    <span id="option2" class="answer correct">Correct! The prefrontal cortex
+    often suffers from large distortions (and drop-out, which cannot be
+    corrected for using fieldmaps) due to its proximity to sinuses
+    etc.</span><br/>
+
+    <input id="option3" class="option" type="radio"
+    name="answer"/><label>Thalamus</label>
+    <span id="option3" class="answer incorrect">Incorrect. The thalamus is
+    very central within the brain, and is not particularly susceptible to
+    distortions in EPI imaging.</span><br/>
+  </form>
+</div>
+
+
+<p>Now go to the FSLeyes window where you were looking at the second
+registration step (structural to standard). Add
+the <code>highres2standard.nii.gz</code> image from the registration you ran
+(<code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/test_reg.feat/reg/highres2standard.nii.gz</code>).
+This registration step was done linearly (using FLIRT) rather than nonlinearly
+(using FNIRT). Compare the linear and linear+non-linear versions of this
+step.</p>
+
+
+<p>Now add (to FSLeyes) the second brain example we have provided, using both
+linear and non-linear registration to the standard space:</p>
+
+
+<pre class="listing">
+/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/BRAIN_2/brain2_reg_linear2standard.nii.gz
+/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/BRAIN_2/brain2_reg_nonlinear2standard.nii.gz
+</pre>
+
+
+<div class="quiz_question">
+
+  <span class="question">Which brain (original or brain2) registered more
+  successfully to the standard brain using linear only registration? Can you
+  think why this might have been the case?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio"
+    name="answer"/><label>Original brain</label>
+    <span id="option1" class="answer correct">Correct! This brain
+    registered pretty well using linear only registration, although it was
+    slightly improved with non-linear registration. This brain was from a
+    young adult, whose brain was a much closer match to the MNI template it
+    was registered to.</span><br/>
+
+    <input id="option2" class="option" type="radio"
+    name="answer"/><label>Brain 2</label>
+    <span id="option2" class="answer incorrect">Incorrect. This brain was very
+    badly registered to the standard using linear only registration. This
+    brain was from an older adult with much larger ventricles and local brain
+    differences to the MNI template, hence linear registration performed very
+    poorly.</span><br/>
+  </form>
+</div>
+
+
+
+<p>Finally, de-select (or remove) the <code>highres2standard</code> images
+within the FSLeyes session. Add the combined registration images from the
+supplied example using both fieldmaps and non-linear registration
+(<code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/example_reg.feat/reg/example_func2standard.nii.gz</code>)
+and the registration you ran without fieldmaps or non-linear registration
+  (<code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/test_reg_no_fmaps.feat/reg/example_func2standard.nii.gz</code>).
+<span class="note">You may need to rename these within FSLeyes to avoid
+confusion.</span> The registration without fieldmap correction or non-linear
+registration will be markedly worse than the original registration, as both
+sub-optimal registration steps have now been concatenated into one step.</p>
+
+
+<div class="quiz_question">
+
+  <span class="question">How many times do we resample the image when we
+  register from functional to standard space, and why?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio"
+    name="answer"/><label>Twice - we want to make sure the brain is accurately
+    aligned to the structural image and then to the standard template, so each
+    registration and resampling must be performed independently.</label>
+    <span id="option1" class="answer incorrect">Incorrect. While the
+    registration steps are performed separately, the transformation files are
+    concatenated so that we only have to resample once into standard
+    space. Accuracy of registration steps is maintained, while resampling
+    degrades the image quality and should be minimized.
+    </span><br/>
+
+    <input id="option2" class="option" type="radio"
+    name="answer"/><label>Never - we do all of our analysis in native space,
+    and registration is just for display purposes.</label>
+    <span id="option2" class="answer incorrect">Incorrect. Whilst some
+    analysis is conducted in native space, many require us to resample our
+    image into a different space, such as a template space when we want to
+    compare individual brains in a group analysis.</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>Once
+    - we want to resample only into the standard space to minimize image
+    degradation.</label>
+    <span id="option3" class="answer correct">Correct! The individual
+    registration steps are concatenated to move from functional to structural
+    to standard space all in one go, with resampling only happening at the
+    very end into the standard space.</span><br/>
+  </form>
+</div>
+
+
+<hr/>
+<h2><a name="applying">Applying and Inverting Transformations</a></h2>
+
+
+<p>The objective of this section of the practical is to become familiar with
+applying transformations, as well as their inverses, to move masks (or images)
+between different spaces. This is very useful as although FEAT, Featquery and
+FDT do a lot of this &quot;behind the scenes&quot; for you, there will be many
+cases when you want to do something beyond the standard options and then
+you'll need to be able to do this for yourself.</p>
+
+
+<p>We will be working with the files from the Feat analysis in the previous
+part of the practical, however what we are doing is not restricted to
+functional analysis. FDT outputs similar files when analysing diffusion
+datasets, and the same files (affine transformation matrices and warp fields)
+are output by the fundamental tools, FLIRT and FNIRT, when doing any
+structural analyses.</p>
+
+
+<h3>Transformation files</h3>
+
+
+<p>If you look in the example registration directory you will see many
+different files:</p>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/example_reg.feat/reg/
+ls
+</pre>
+
+
+<p>The crucial ones for registration purposes are the transformation files
+that come in two different varieties: affine matrices (ending
+with <code>.mat</code>) and warp fields (ending
+with <code>_warp.nii.gz</code>). For now we will not look at the contents of
+these files (see the exercises below for more about this) but instead we will
+explain what each of them means.</p>
+
+
+<p>The naming convention is always from the input space to the reference space
+(or source to destination if you prefer). For example, the
+file <code>highres2standard.mat</code> is an affine transformation going from
+the highres (structural) space to the standard (MNI) space. There is also the
+file <code>highres2standard_warp.nii.gz</code> that represents a non-linear
+warp from highres space to standard space. We have both of these because it is
+necessary to initialise all non-linear registrations with an affine
+registration (that gets the head in roughly the right position and scaling to
+allow the non-linear registration to work well). When you want to use a
+transformation between these spaces, you would generally go for the warp field
+(when it exists) and ignore the initial affine registration. Note that the
+warp fields include the affine transformation as part of them, so you don't
+need to use both.</p>
+
+
+<p>There are three main spaces in a FEAT analysis: functional (represented by
+<code>example_func</code>); structural (represented by <code>highres</code>);
+and MNI (represented by <code>standard</code>). Various combinations of
+transformations exist in this directory (e.g. <code>example_func2highres</code>,
+<code>example_func2standard</code>, <code>highres2standard</code>) but not all
+(e.g. <code>standard2highres</code>). Note that in a diffusion analysis, run
+via FDT, the three spaces are called <code>diff</code>, <code>str</code>
+and <code>standard</code>, and all combinations of transformations are
+provided.</p>
+
+
+<p>One thing that might confuse you is why there
+exists <code>example_func2highres_warp.nii.gz</code> when BBR (which
+performs <em>linear</em> registration) was run to do the registration of
+functional to structural images. This is because of the fieldmap-based
+distortion correction, which is not just a linear (affine) registration and so
+must be represented as a warp field.</p>
+
+
+<hr/>
+<h3>Creating an example mask</h3>
+
+
+<p>Now let's make a mask in the standard (MNI) space so that we can transform
+it into the other spaces and use it to calculate some ROI quantities. We will
+do this using FSLeyes - type in <code class="bash">fsleyes -std &</code> to get
+started.</p>
+
+
+<p>Once FSLeyes is open, select the <em>Settings &gt; Ortho View 1 &gt; Atlas
+panel</em> menu option. This will open up a new panel along the bottom of the
+FSLeyes GUI that allows you to look at anatomical information from the atlases
+included with FSL. We can use these atlases to create a mask image (we will
+choose the left hippocampus from the Harvard-Oxford subcortical atlas, but
+there are lots of possibilities).</p>
+
+
+<p>Click the <em>Atlas search</em> tab. Type <code>hip</code> into the search
+  box at the top of the right section - note that as you type, all atlases, in
+  the atlas list to the left, which contain a structure that matches the
+  search term, are highlighted. Click the checkbox next to the
+  <em>Harvard-Oxford Subcortical Structural Atlas</em> to add it as an
+  overlay. Then, in the structure list on the right, click the &quot;+&quot;
+  button by the <em>Left Hippocampus</em> entry, to move the cursor location
+  to this structure. </p>
+
+
+<p>Now we are going to select the voxels in the left hippocampus. An alternative method to create a mask will be discussed in the <a href="../feat1/index.html"> first FEAT</a> practical.</p>
+
+<ol>
+
+  <li>Turn on edit mode (<em>Tools &gt; Edit
+mode </em>). Two new toolbars will be added to the FSLeyes
+      window.</li>
+
+  <li>On the toolbar along the top:
+    <ul>
+      <li>Click the selection mode button (<img src="selection_mode_icon.png"
+        class="icon"/>)</li>
+
+      <li>Click the select-by-intensity button
+      (<img src="selectByIntensity_icon.png" class="icon"/>).</li>
+
+      <li>Enable 3D selection (<img src="selection_3D_icon.png"
+      class="icon"/>).</li>
+
+    </ul>
+    Now we are able to select regions of voxels according to their intensity.
+  </li>
+
+
+  <li>Click anywhere in the left hippocampus structure to select all of the
+    voxels within it.</li>
+
+  <li>On the toolbar running down the left hand side, click the <em>Create
+    mask</em> button (<img src="create_mask_icon.png" class="icon"/>), to copy
+    this selection to a new mask image.
+  </li>
+</ol>
+
+
+<div class="aside">
+This mask can also be created directly at the command line
+using <code>fslroi</code> and <code>fslmaths</code> with the images
+in <code>$FSLDIR/data/atlases</code> and finding the appropriate values from
+the xml files (but be warned that the numbers in the xml files differ by one
+from the numbers needed in <code>fslroi</code> - see the
+<a href="fsl/fslwiki/Atlases.html">FSL
+wiki</a> for more details).
+</div>
+
+
+<p>A new image will be added to FSLeyes, with ones in the left hippocampus,
+and zeros everywhere else. Exit edit mode (<em>Tools &gt;
+Edit mode</em>), and toggle the visibility of the Harvard Oxford subcortical
+atlas (the <img src="eye_icon.png" class="icon"/> button in the overlay list)
+so you can see your new mask image better.</p>
+
+
+<p>We will now save this mask image out to a file in the directory <code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/example_reg.feat/reg</code>.
+  Click on the save button
+(<img src="floppy_disk_icon.png" class="icon"/>) alongside the mask image in
+the overlay list, and choose an appropriate name
+(e.g. <code>LeftHippMask</code>). To make life a lot easier later on make sure
+you remove all spaces from the filename. This is a general rule to stick with,
+as spaces within filenames will almost always cause problems and are easily
+avoided.</p>
+
+
+<hr/>
+<h3>Inverting a transform</h3>
+
+
+<p>We want to transform the mask we just made into the functional space in
+order to calculate an ROI value (e.g. of a statistical image, or an average
+timecourse, etc.). To go from the standard space to the functional space we
+would need to have the transformation
+<code>standard2example_func_warp.nii.gz</code> (or something named like
+this). In FEAT this does not exist, but in FDT the equivalent is generated
+automatically, and called <code>standard2diff_warp.nii.gz</code>.</p>
+
+
+<p>As feat does not create the required warp field, we need to create it
+ourselves from the transformations that it does provide. In this case we do
+not want to undo the distortion correction (i.e. we want a mask in
+distortion-corrected functional space). For the structural-to-functional
+transform we therefore only need <code>highres2example_func.mat</code> which
+was already created by FEAT. We do need to calculate the nonlinear
+standard-to-structural transform, which can easily be done using
+the <code>invwarp</code> command, as follows:</p>
+
+
+<pre class="dontrun">
+# This would take too long to run during a practical session,
+# (around 20 minutes) so we have already run it for you.
+invwarp -w highres2standard_warp -o standard2highres_warp -r highres
+</pre>
+
+
+<p>where the final part (the reference) controls the size (FOV) and resolution
+of the warp and should generally be the destination space of the new
+transform. As this warp transforms from standard space to structural (we will
+stick on the final transformation to functional space below), we specify
+<code>highres</code>.</p>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="Nonlinear transformation
+(highres2standard_warp.nii.gz)"];
+  2 [label="Input image
+(highres)"];
+  3 [label="invwarp"];
+  4 [label="Inverted nonlinear transformation
+(standard2highres_warp.nii.gz)"];
+
+  1 -> 3;
+  2 -> 3;
+  3 -> 4;
+}
+</div>
+
+
+<hr/>
+<h3>Applying a transformation</h3>
+
+
+<p>Now that we have the transformation that we need, we can apply it using
+the <code>applywarp</code> command, by specifying a warp
+(<code>-w</code>). The command you need is (with your own filenames):</p>
+
+
+<pre class="bash">
+applywarp -i LeftHippMask -r example_func -o LeftHippMaskFunc \
+  -w standard2highres_warp --postmat=highres2example_func.mat
+</pre>
+
+
+<p>which goes from the <code>standard</code> space via
+the <code>highres</code> space to the <code>example_func</code> space (the
+last part only needing a rigid-body transformation matrix, as we want to end
+up in the distortion-corrected functional space, rather than the original
+distorted one).</p>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="Image to transform
+  e.g. mask in standard space
+  (LeftHippMask.nii.gz)"];
+  2 [label="First transformation
+  e.g. nonlinear from standard to structural
+(standard2highres_warp.nii.gz)"];
+  3 [label="Second transformation
+  e.g. linear from structural to functional
+(highres2example_func.mat)"];
+  4 [label="applywarp"];
+  5 [label="Transformed/Resampled image
+  e.g. mask in example_func space
+(LeftHippMaskFunc.nii.gz)"];
+
+  1 -> 4;
+  2 -> 4;
+  3 -> 4;
+  4 -> 5;
+}
+</div>
+
+
+<h4>Visual Check</h4>
+
+
+<p>Use the command:</p>
+
+
+<pre class="bash">
+fsleyes example_func LeftHippMaskFunc &amp;
+</pre>
+
+
+<p>to see the mask on the functional image. Note that the values at the edge
+of the mask lie between 0 and 1.</p>
+
+
+<h4>Thresholding the Mask</h4>
+
+
+<p>In order to obtain a binary mask (where each voxel has a value of either 0
+or 1) we need to threshold and binarise the transformed mask. This is easily
+done with fslmaths but the threshold used is arbitrary. If a high threshold is
+chosen (e.g. 0.9) then most edge voxels will be excluded and the mask will be
+tighter and less likely to include neighbouring structures. This is often
+desirable when trying to make sure that only the structure of interest is
+included, but it might end up with the mask being quite small. So sometimes a
+threshold near 0.5 is preferable, to make a mask of similar size/volume. Or
+sometimes a mask is needed that does not leave out any of the structure, in
+which case a low threshold (e.g. 0.1) can be better. We also binarise the mask
+with the <code>-bin</code> command in <code>fslmaths</code>, to make all
+voxels within the mask have a value of 1. In this case we will choose a high
+threshold in order to get a mask where we are very confident that each voxel
+in the mask is within the hippocampus. This can be done with:</p>
+
+
+<pre class="bash">
+fslmaths LeftHippMaskFunc -thr 0.9 -bin LeftHippMaskFuncBin
+</pre>
+
+
+<p>Load the resulting image into FSLeyes and compare it to the original,
+pre-thresholded version in the functional space.</p>
+
+
+<h4>Using the Mask</h4>
+
+
+<p>There are many possible ways in which a mask can be used (e.g. getting
+average statistical values) but as an example will we calculate the average
+timecourse of the fMRI within this mask. This is done with the command:</p>
+
+
+<pre class="bash">
+fslmeants -i ../filtered_func_data -m LeftHippMaskFuncBin
+</pre>
+
+<p>which will output a column of numbers, representing the timecourse of the
+average signal intensity (of the pre-processed fMRI data) within this mask. We
+won't do anything with this for now, but such calculations can be very useful
+in all sorts of situations.</p>
+
+
+<p>The main point of this exercise was to see how to transform your own masks
+(or images, as the only difference is skipping the thresholding and binarising
+steps) between spaces. For functional studies you can often do similar things
+with the tool <code>Featquery</code> but it is not as flexible and generally
+  useful as being able to process things yourself.</p>
+
+
+<div class="quiz_question">
+
+  <span class="question">If we were interested in the functional signal in
+  (for example) the amygdala within the fMRI data in a particular subject,
+  which space would we transform a standard mask of the amygdala into for
+  further processing?</span><br/>
+
+  <form>
+
+    <input id="option1" class="option" type="radio" name="answer"/><label>The
+    structural space - we want to make sure we get the most accurate signal
+    from the data, and this is when the image is in structural space </label>
+    <span id="option1" class="answer incorrect">Incorrect. We perform most of
+    our fMRI analysis in distortion-corrected functional space. The accuracy
+    does not improve in structural space, as the data was acquired in
+    functional space.</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>The
+    distortion-corrected functional space - we do our task analysis in
+    functional space, once it has been corrected for distortions </label>
+    <span id="option2" class="answer correct">Correct!</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>The
+    native functional space - we do our task analysis in functional space,
+    without any registrations applied</label>
+    <span id="option3" class="answer incorrect">Incorrect. We perform most of
+    our fMRI analysis in distortion-corrected functional space.</span><br/>
+  </form>
+</div>
+
+
+
+<hr/>
+<h2><a name="multiband">Multiband data registration (Optional)</a></h2>
+
+<p>A new functional imaging technique that is becoming more popular is 'multiband imaging'. Multiband imaging allows people to acquire functional images more quickly, allowing more volumes in the functional 4D file for more statistical power, or shortening functional scanning times. Many of you might be using multiband data for your own imaging projects, so here we have an optional section to demonstrate how we can optimise registration of multiband scans.</p>
+
+<p>Because multiband images are acquired very quickly, they can have low contrast between grey and white matter. Therefore, to aid registration we can add an additional high-contrast image to our registration between functional and standard spaces. This high-contrast image is usually one of the first few scans ('pre-saturation' scans) acquired in a multiband sequence, which are usually discarded before functional analysis. In every other way it matched the functional scans used in the analysis, so it is a perfect match to the <code>FUNC.nii.gz</code> image, just with greater contrast between tissues in the brain. Note that registration of multiband data does not require this step to run, but it is recommended to use this intermediate contrast image for improved registration of multiband images.</p>
+
+<p>Move into the <code>multiband_data</code> directory:</p>
+
+<pre class="bash">
+cd /storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/multiband_data/
+ls
+</pre>
+
+<p>This directory contains the following images:</p>
+
+<ol>
+<li>A structural scan and the brain extracted version: <code>STRUCT.nii.gz</code> and <code>STRUCT_brain.nii.gz</code></li>
+<li>A functional scan: <code>MULTIBAND_FUNC.nii.gz</code></li>
+<li>A high-contrast volume to help aid registration: <code>CONTRAST_FUNC.nii.gz</code></li>
+<li>A magnitude fieldmap image and its brain extracted counterpart: <code>FMAP_MAG.nii.gz</code> and <code>FMAP_MAG_brain.nii.gz</code></li>
+<li>A phase fieldmap image: <code>FMAP_PHASE.nii.gz</code></li>
+<li>A fieldmap image we have created for you: <code>FMAP_RADS.nii.gz</code></li>
+<li>A text file containing the fieldmap information: <code>FMAPS.txt</code></li>
+<li>An example registration: <code>example_multiband_reg.feat</code></li>
+</ol>
+
+<p>If you are short on time you can open the example registration web report to have a look at this registration, and note how the intermediate step helps the functional to structural registration:</p>
+
+<pre class="bash">
+firefox example_multiband_reg.feat/report_reg.html &amp;
+</pre>
+
+<p>Note that the registration from <code>example_func</code> to <code>highres</code> is now split into two parts. The first transforms from <code>example_func</code> to the high-contrast volume (referred to as <code>initial_highres</code>). The second transforms from the high-constrast volume to <code>highres</code>.</p>
+
+<p>If you want to try running this registration yourself, open a new FEAT GUI by typing <code>Feat &</code> in the terminal. Change the drop-down list to <b>Preprocessing</b> and enter the <code>MULTIBAND_FUNC.nii.gz</code> image in the <b>Select 4D data</b> input. Now go to the <b>Pre-stats</b> tab and click the <b>B0 unwarping</b> button. Fill in the information as follows (note that not all scan information is the same as before so follow the instructions carefully):</p>
+
+<ul>
+  <li><b>Fieldmap</b>: <code>FMAP_RADS</code> (select this using the file
+    browser that the folder icon opens)</li>
+  <li><b>Fieldmap mag</b>: <code>FMAP_MAG_brain</code></li>
+  <li><b>Effective EPI echo spacing</b>: 0.57ms (taken from
+    the <code>FMAPS.txt</code> file here, remember to ask your operator and divide by the
+    parallel-imaging acceleration factor (which is not the same as the multi-band
+    acceleration factor).</li>
+  <li><b>EPI TE</b>: 33.4ms</li>
+  <li><b>Unwarp direction</b>: &quot;-y&quot (again your operator can tell you
+    whether the unwarp direction, or phase encode direction, is x, y or z, but
+    whether it is + or - needs to be determined, currently, by trial and
+    error, which has already been done here)</li>
+  <li><b>&#37; Signal loss threshold</b>: Leave at the default value of
+  10&#37;.</p>
+</ul>
+
+<p> All other parts of this tab can be left with their default settings. In the <b>Registration</b> tab, now click on the <b> Expanded functional image</b> button. Open the file browser and select <code>CONTRAST_FUNC.nii.gz</code>, then change the degrees of freedom to 6. Note that registration does not require this step to run, but it is recommended to use this intermediate contrast image for registration of multiband data. Select <code>STRUCT_brain.nii.gz</code> as your <b>Main structural
+image</b>. Make sure you turn the <b>non linear</b> option <b>OFF</b> so that you save some time here. Go back to the <b>Data</b> tab, and rename your output (in the <b>Output directory</b> section) to something like &quot;<code>test_reg_multiband</code>&quot;. Check all your options and press the <b>Go</b> button at the bottom again. This should start up a new web browser tab with the progress of your new FEAT run. Note how the extra registration step is now included in the report. Feel free to load any of the registration steps into FSLeyes to explore these in more detail.</p>
+
+
+<hr/>
+<p class="centred">The End.</p>
+</div>
+</body>
+</html>
