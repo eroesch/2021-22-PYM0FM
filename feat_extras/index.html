@@ -1,0 +1,410 @@
+<!DOCTYPE>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+
+<!-- Start of Practical boilerplate. -->
+<link rel="stylesheet" type="text/css" href="../fsl/fsl.css" />
+<link rel="stylesheet" type="text/css" href="../fsl/quiz.css">
+<link rel="stylesheet" type="text/css" href="../fsl/viz.css">
+
+<script type="text/javascript" src="../fsl/quiz.js"></script>
+<script type="text/javascript" src="../fsl/showhide.js"></script>
+<script type="text/javascript" src="../fsl/viz.js"></script>
+<script type="text/javascript">
+window.onload=function() {
+    setupQuizQuestions();
+    var graphs = document.querySelectorAll(".viz-graph");
+    var parser = new DOMParser;
+    for (var i = 0; i < graphs.length; i++){
+        var div = graphs[i];
+        var dom = parser.parseFromString(div.innerHTML, "text/html");
+        div.innerHTML = Viz(dom.body.textContent);
+        var svg = div.querySelector("svg");
+        svg.setAttribute("width",  "100%");
+    }
+}
+</script>
+<!-- End of Practical boilerplate. -->
+
+<title>FEAT Extras Practical</title>
+</head>
+
+
+<body>
+<div id="practical">
+<h1 class="centred">FEAT Extras Practical</h1>
+
+<p>This is the version of the FSL practical adjusted for use in PYM0FM, to be used on the CINN Nutanix Platform. Consequently, there are a few things you need to keep in mind:
+<ul>
+     <li>The data is not stored in your home folder (~/fsl_course_data), and instead it is stored in the shared pym0fm drive, located at <code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data</code>.</li>
+     <li>We are using virtual machines that are preconfigured for neuroimaging work. Our researchers typically use both FSL verion 5 and 6, and to avoid conflict we are containing version of the software in modules. When you start a new terminal session, whether you start a new analysis, or you just closed one terminal, you will have to type <code>module load fsl6.0</code>, each time.</li>
+</ul>
+</p>
+<p><center>---</center></p>
+
+<p>This practical contains an overview of some advanced analysis methods
+available in FEAT. It leads you through some of the more advanced usage and
+concepts in both single-session and higher-level FEAT analyses. Feel free to
+do the latter two sections in a different order if you are particularly
+interested in any of them.
+</p>
+
+
+<h2>Contents:</h2>
+
+
+<dl class="contents">
+  <dt> <a href="#custom">Custom Waveforms</a></dt>
+  <dd> An example of the options for setting up first-level FEAT analyses
+    with simple designs that do not require timing files.</dd>
+
+  <!--dt> <a href="#outlierinf">Outlier Inference</a></dt>
+  <dd> Become familiar with the outlier information provided by
+    FLAME's group analysis. </dd-->
+
+  <dt><a href="#basisfunctions">HRF Basis Functions</a></dt>
+  <dd> Create and use basis functions to model more general / flexible HRF
+  shapes.</dd>
+</dl>
+
+
+
+<hr/>
+<h2><a name="custom">Custom Waveforms</a></h2>
+
+
+<p>
+It is possible to specify EVs in FEAT using Custom Waveforms. Here, a
+simulated dataset (with reduced FOV) has been generated with some event-related conditions to
+model.
+</p>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fmri_extras/custom_waveforms
+</pre>
+
+<p>
+Open FEAT (<code class="bash">Feat &amp;</code>
+[or <code class="bash">Feat_gui &amp;</code> on Mac]) and follow the
+instructions below.
+</p>
+
+
+<ul class="pad-after">
+
+  <li>Select the data <code>artdata.nii.gz</code> (you may get a warning about
+    pre-set options, you can ignore it). This dataset has already been
+    preprocessed, so change <b>Full analysis</b> to <b>Statistics </b>. </li>
+
+  <li>Go to <b>Full model setup</b> (under the <b>Stats</b> tab) and set 3 EVs
+    (there are three different things going on in the data with their own
+    timings). We will convolve all of these EVs with a gamma function.</li>
+
+  <li>Condition 1 is a boxcar (square wave) design so set <em>EV1</em> to be
+    Off=20 On=20 Phase=10.</li>
+
+
+  <li>Condition 2 is a jittered event-related design with
+    inter-stimulus-interval (ISI) &gt; 20s and mean(ISI)=25s; so set EV2's
+    <b>Basic shape</b> to <em>custom (3 column format)</em>; select the
+    filename as <code>jittered_isi_custom_file.dat</code>. In the terminal
+    have a quick look at the custom file with the <code>less</code>
+    command. The 3 columns are explained in the
+    <a href="fsl/fslwiki/FEAT/UserGuide.html#EVs" target="_blank">FEAT
+    user guide</a>. </li>
+
+
+  <li>Condition 3 is randomised event-related with ISI>3s and mean(ISI)=6s;
+    set EV3's shape to <em>custom (3 column format)</em>; select the filename
+    as <code>rand_isi_custom_file.dat</code>. </li>
+
+
+  <li>Set 3 contrasts [1 0 0] [0 1 0] and [0 0 1] and an F-test [1 1 1] - that
+    is, select all three t-contrasts to be part of the
+    F-test. Press <B>Done</B>. Press <b>Go</b> and wait for exciting results!
+    On the FEAT report page look at the time series plots of data vs
+    model. </li>
+
+
+  <li>If you have time, have a detailed look at the timeseries plots in
+    the <b>Post-stats</b> section of the webpage report. For example, click on
+    the <b>zstat1</b> timeseries plot, to see more information about the
+    fitting related to contrast 1. Find the <b>Peristimulus plot</b> for EV1;
+    this shows the data points for all repeats of the condition described in
+    EV1, collapsed down to one &quot;average&quot; version of that
+    stimulus. In this case this means all repeats of the basic block-design
+    on-off shape. Now go back and click on the <b>zstat2</b> timeseries plot,
+    to see more information about the fitting related to contrast 2. Find
+    the <b>Peristimulus plot</b> for EV3; in this case the plot is showing
+    all repeats of the brief event. </li>
+
+
+  <li>Now start <code class="bash">fsleyes</code>, load in
+    the <code>filtered_func_data</code> image in the FEAT output directory, and
+    select <em>View -&gt; Layouts -&gt; FEAT mode</em>. You should be able to
+    see the data timeseries, and the model fit for the current voxel. If you now
+    open the time series control panel (<em>Settings -&gt; Time series 2 -&gt;
+    Time series control</em>), expand the <em>Time series settings for artdata:
+    filtered_func_data</em> section, and check the <em>Plot COPE1 fit</em> box,
+    you will see the data, full model fit, and the COPE1 fit, for the current
+    voxel. </li>
+</ul>
+
+
+
+<!--hr/>
+<h2><a name="outlierinf">Outlier Inference</a></h2>
+
+
+<p>
+In this section we look at the output that is generated when outlier
+de-weighting is used. This is used in higher-level FEAT analyses, and can be
+selected under the <b>Stats</b> tab. Note that outlier de-weighting can be
+performed for any of the mixed effects analyses, but is not applicable to
+a fixed effects analysis.
+</p>
+
+
+<p>
+In the interest of time, we have provided you with the stripped down results
+of a group Feat analysis that has been setup and run with outlier de-weighting
+for you.
+</p>
+
+
+<p>
+The experiment is looking to infer the group mean effect over a group of 18
+subjects. The effect of interest is the BOLD response in the feedback phase of
+a decision making experiment.
+</p>
+
+
+<p>
+Move into the group Feat directory corresponding to this lower-level contrast:
+</p>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fmri_extras/outliers/decmak.gfeat/cope1.feat
+</pre>
+
+
+<p>Inside the <code>stats</code> directory are the results of the higher level
+run with outlier inference turned on. Take a look at the files in that
+directory:
+</p>
+
+
+<pre class="bash">ls stats</pre>
+
+
+<p>The <code>prob_outlier1.nii.gz</code> file is a 4D nifti file giving the
+probability that each subject has outlier data on a voxelwise
+basis. The <code>global_prob_outlier1.nii.gz</code> file is a 3D nifti file
+that indicates the proportion of the subjects classified as outliers at each
+voxel (see the lecture for more details). Note there are versions of these
+files for each variance group in the analysis. In this case, there was only
+one variance group.</p>
+
+
+<p>
+Load the <code>global_prob_outlier1</code> file into FSLeyes.
+</p>
+
+<pre class="bash">fsleyes stats/global_prob_outlier1.nii.gz</pre>
+<p>Use <em>File &gt; Add standard</em> to load in the MNI standard
+brain <code>MNI152_T1_2mm_brain</code>.  Use <em>File &gt; Add overlay from
+file</em> to load in the <code>prob_outlier1</code> file, and also load in the
+<code>filtered_func_data</code> in the
+<code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fmri_extras/outliers/decmak.gfeat/cope1.feat</code>
+directory. Note that the <code>filtered_func_data</code> file is a 4D nifti
+file of the 18 subjects' first-level effect sizes (COPEs) at each voxel, in
+other words the &quot;data&quot; that gets used to calculate the group average
+at each voxel.
+</p>
+
+<p>Open a time series view, via <em>View -&gt; Time series</em>. Make sure
+that the time series for both the <code>prob_outlier1</code>
+and <code>filtered_func_data</code> images will be plotted by toggling them on
+(the <img src="eye_icon.png" class="icon"/> button in the list to the left of
+the plot). And set the <b>Plotting mode</b> to <em>Normalised</em>, so the
+different time courses have the same range, and can thus be easily
+compared. Then hide the <code>prob_outlier1</code>
+and <code>filtered_func_data</code> images (again, the <img src="eye_icon.png"
+class="icon"/> button, but this time in the list just below the ortho view) so
+that they do not get displayed on the spatial map. </p>
+
+
+<p>Navigate around the brain to see where outlier behaviour occurs, and see
+how this relates to the data in the <code>filtered_func_data</code> timeseries
+plots and to the probability that each subject has outlier data in
+the <code>prob_outlier1.nii.gz</code> timeseries plots. Which subject is
+causing the most outlier behaviour? </p>
+
+
+<p>Inside the <code>stats</code> directory is the file
+<code>zstat1</code>. These are the z-stats resulting from the higher level
+analysis run with the outlier inference turned off (note that this would not
+normally be available when you have run outlier inference - it is provided for
+you here to allow you to make comparisons). Use <em>File->Add overaly from
+file</em> to load <code>zstat1</code> into FSLeyes for the analyses with
+outlier de-weighting
+(<code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fmri_extras/outliers/decmak.gfeat/cope1.feat/stats/zstat1_no_outliers</code>)
+and without outlier de-weighting
+(<code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fmri_extras/outliers/decmak.gfeat/cope1.feat/stats/zstat1</code>).
+Take a look at how the zstats are changed when there are outliers detected.
+</p-->
+
+
+
+<hr/>
+<h2><a name="basisfunctions">HRF Basis Functions</a></h2>
+
+
+<p>
+This section shows you how basis functions can be setup and used in FEAT. The
+dataset we will use is a jittered single-event experiment with 200 time
+points. The stimulus is heat applied for 3 seconds with an average
+inter-stimulus interval of 70 secs. We will only analyze one slice to allow
+for quick processing.
+</p>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fmri_extras/flobs
+Feat &amp;
+</pre>
+
+
+<ul class="pad-after">
+
+
+  <li>Press <b>Select 4D data</b> and select <code>filtdata.nii.gz</code>.
+    This dataset has already been preprocessed, so change <b>Full analysis</b>
+    to <b>Statistics</b>. </li>
+
+
+  <li>Set the <b>High pass filter cutoff</b> to 50sec.</li>
+
+  <li>Setup one EV using the Custom (3 column format)
+    file <code>pain_paradigm.txt</code>.  Note that this is the underlying
+    experimental stimulus and is assumed to also correspond to the neuronal
+    response to the stimulus. This needs to be convolved with our assumed
+    HRF.</li>
+</ul>
+
+
+<p> To start with we will analyze the dataset assuming a fixed Gamma HRF (no
+basis functions) and then compare the results with a set of the optimal linear
+basis functions.</p>
+
+
+<ul class="pad-after">
+
+  <li> Hence, for the EV leave the <b>Convolution</b> as <b>Gamma</b>, BUT
+    turn OFF <b>Add temporal derivative</b> as we want to show the results for
+    when a simple, fixed HRF is assumed.</li>
+
+
+  <li>Take a look at the contrasts - the default OC1 contrast
+  of <code>[1]</code> is fine. You need to also make an F-contrast consisting
+  only of ev1 so that we can compare it to what we will do later.</li>
+
+  <li>Press <b>Done</b> and view the design.</li>
+
+  <li>Take a look at the <b>Post-stats</b> tab - the defaults are fine.</li>
+
+
+  <li>Press <b>Go</b> and wait for the results. On the FEAT report
+    page look at the time series plots of data vs model.</li>
+</ul>
+
+
+<p>We will now process the same data using FMRIB's Linear Optimal Basis Set
+  (FLOBS) and compare the results. Kill and
+  restart <code class="bash">Feat</code>, and then follow the instructions
+  below.</p>
+
+
+<ul class="pad-after">
+
+  <li>Press <b>Load</b> and select the <b>design.fsf</b> file in
+    the <b>filtdata.feat</b> created from the fixed Gamma HRF analysis we have
+    just performed. This loads up the design we just used - saving us the
+    effort of having to setup many of the same options again. </li>
+
+
+  <li>The only bit we need to change is in <b>Full model setup</b> in
+    the <b>Stats</b> tab. We need to change the
+    <b>Convolution</b> option to <b>Optimal/custom basis functions</b>.</li>
+
+
+  <li>We can now specify the FMRIB's Linear Optimal Basis Set (FLOBS)
+    filename we wish to use. By default the FLOBS provided in
+    <code>$FSLDIR/etc/default_flobs.flobs</code> is used - so leave that
+    selected. You can generate your own customised FLOBS by
+    selecting <em>Utils &gt; Make_flobs</em> on the main FEAT setup GUI (if
+    you have time later then come back and try generating your own basis
+    functions with this GUI and feed that into FEAT). </li>
+
+  <li>Now go to the <b>Contrasts and F-tests</b> tab. Change the number of
+    F-tests back to zero - when using basis functions, an F-test will be
+    automatically set up for you, so you do not need to manually add one. </li>
+
+  <li>Now, we have two ways of setting up contrasts with basis functions. This
+    is via consideration of the <em>Original EVs</em> or the <em>Real
+    EVs</em>. </li>
+
+  <li>The default is to work with the <em>Original EVs</em>.  Original EVs
+    correspond to the true underlying effects/conditions in the
+    experiment. Hence, to investigate if the effect is significant, a simple
+    OC1 contrast <code>[1]</code> suffices. </li>
+
+
+  <li> Now press <b>View Design</b> and the actual design matrix to be used is
+    displayed.  This shows one EV for each of the basis functions convolved
+    with the experimental stimulus.  The single <em>Original EV</em> is
+    automatically expanded into the <em>Real EVs</em> (in this case 3 EVs) that need to be actually
+    used in the design matrix when modelling with basis functions. Note that
+    the OC1 <code>[1]</code> contrast will be actually carried out by the F1 f
+    contrast. Why is this the correct way to do the test?</li>
+
+
+  <li> Return to <b>Contrasts and F-tests</b> and change <b>Original EVs</b>
+    to <b>Real EVs</b>. The single Original EV is again automatically expanded
+    into the Real EVs actually used in the design matrix, but now you have
+    control of the actual contrast settings used. </li>
+
+
+  <li> Again press <b>View Design</b> and the design should be exactly the
+    same as it was before. </li>
+
+
+  <li> Press <b>Done</b> and then press <b>Go</b> and wait for the results.
+    Take a look at the FEAT report. In particular, look at the peristimulus
+    (PST) plots by clicking on the model fit plots.  The peristimulus plots
+    show the fits to a single epoch of stimulation.  The data actually
+    acquired at each repeat of the stimulation is plotted as a scatter of
+    points. The <em>full model fit</em> on the peristimulus plot indicates the
+    HRF formed by fitting the basis set to the data. </li>
+
+
+  <li> Compare this FEAT report with the FEAT report from the single HRF Gamma
+    run previously. Are there any differences? </li>
+
+
+  <li>If you get time at the end of this session try running a range of
+    different basis sets, e.g. Sinusoidal, FIR. In particular, have a go at
+    making your own customised basis set (FLOBS) using <em>Utils &gt;
+    Make_flobs</em> on the main FEAT setup GUI. </li>
+</ul>
+
+
+<hr />
+<p class="centred">The End.</p>
+</div>
+</body>
+</html>
