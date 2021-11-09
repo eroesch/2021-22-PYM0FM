@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+
+<!-- Start of Practical boilerplate. -->
+<link rel="stylesheet" type="text/css" href="../fsl/fsl.css" />
+<link rel="stylesheet" type="text/css" href="../fsl/quiz.css">
+<link rel="stylesheet" type="text/css" href="../fsl/viz.css">
+
+<script type="text/javascript" src="../fsl/quiz.js"></script>
+<script type="text/javascript" src="../fsl/showhide.js"></script>
+<script type="text/javascript" src="../fsl/viz.js"></script>
+<script type="text/javascript">
+window.onload=function() {
+    setupQuizQuestions();
+    var graphs = document.querySelectorAll(".viz-graph");
+    var parser = new DOMParser;
+    for (var i = 0; i < graphs.length; i++){
+        var div = graphs[i];
+        var dom = parser.parseFromString(div.innerHTML, "text/html");
+        div.innerHTML = Viz(dom.body.textContent);
+        var svg = div.querySelector("svg");
+        svg.setAttribute("width",  "100%");
+    }
+}
+</script>
+<!-- End of Practical boilerplate. -->
+
+<title>FDT Tractography Practical</title>
+</head>
+
+
+<body>
+<div id="practical">
+<h1 class="centred">FDT Tractography Practical</h1>
+
+<p>This is the version of the FSL practical adjusted for use in PYM0FM, to be used on the CINN Nutanix Platform. Consequently, there are a few things you need to keep in mind:
+<ul>
+     <li>The data is not stored in your home folder (~/fsl_course_data), and instead it is stored in the shared pym0fm drive, located at <code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data</code>.</li>
+     <li>We are using virtual machines that are preconfigured for neuroimaging work. Our researchers typically use both FSL verion 5 and 6, and to avoid conflict we are containing version of the software in modules. When you start a new terminal session, whether you start a new analysis, or you just closed one terminal, you will have to type <code>module load fsl6.0</code>, each time.</li>
+</ul>
+</p>
+<p><center>---</center></p>
+
+    <p>
+        In this practical you are going to run tractography using FSL's <code>probtrackX</code>.
+        We will first take a look at the ouput of <code>bedpostX</code>,
+        which estimates the fibre orientations (with uncertainties) in each voxel.
+        <code>ProbtrackX</code> will use these to reconstruct white matter tracts
+        or to estimate the connectivity between gray matter regions.
+        We will use the latter to segment the thalamus.
+    </p>
+    <p>
+        Here we will only consider a single subject.
+        For multiple subjects you would typically repeat the same <code>bedpostX</code> and <code>probtrackX</code>
+        calls for every subject before comparing the results across subjects.
+    </p>
+
+
+
+<h2>Contents:</h2>
+<dl class="contents">
+
+    <dt><a href="#bedpostx">Bedpostx output</a></dt>
+    <dd>Exploring the results of calling <code>bedpostx</code></dd>
+
+    <dt><a href="#voxel_seed">Tractography in different spaces</a></dt>
+    <dd>Generating connectivity distributions from single voxels in diffusion, structural, or standard space</dd>
+
+    <dt><a href="#priors">Using masks to impose anatomical priors</a></dt>
+    <dd>Using exclusion/waypoint/termination masks to inform tractography</dd>
+
+    <dt><a href="#connectivity">Estimating connectivity between brain regions</a></dt>
+    <dd>Estimates the connectivity between regions of interest and uses this connectivity to classify voxels in the thalamus</dd>
+
+    <dt><a href="#models">Bedpostx model specification (optional)</a></dt>
+    <dd>Choosing the right model to improve data fitting</dd>
+
+    <dt><a href="#surfaces">Using surfaces to constrain tractography
+    (optional)</a></dt>
+    <dd>Using surfaces to avoid spurious connections</dd>
+</dl>
+
+
+<hr>
+<h2><a name="bedpostx">Bedpostx output</a></h2>
+
+    <pre class="bash">cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fdt2/diffusion
+ls</pre>
+
+    <p>
+        This is what an input directory to <code>bedpostx</code> looks like.
+        It contains the cleaned, aligned diffusion data from <code>topup</code> and <code>eddy</code>
+        (<code>data.nii.gz</code>) as well as a brain mask (<code>nodif_brain_mask.nii.gz</code>) and text files
+        with the b-values (<code>bvals</code>) and gradient orientations (<code>bvecs</code>) for each volume in the data.
+    </p>
+
+    <p>
+        It is possible to run <code>bedpostx</code> from either the FDT GUI or
+        via the command line.  Before you run it you need to have a directory setup
+        that contains data files with standard names, such as this one. You can find a description of this structure in
+        the <a href="fsl/fslwiki/FDT/UserGuide.html#BEDPOSTX">FDT User Guide on the FSL Wiki</a>.
+    </p>
+
+    <p>
+        We will not run <code>bedpostX</code> here as it takes too long.
+        If you wanted to run it you would move up one directory (to <code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fdt2</code>)
+        and run <code>bedpostX diffusion</code> (don't do this).
+        This would take the diffusion data in the <code>diffusion</code> directory (that we just looked at)
+        and produce a new directory <code>diffusion.bedpostX</code> that contains
+        the results from <code>bedpostX</code>.
+    </p>
+    <div class="viz-graph">
+        digraph G {
+        rankdir=LR
+        node [shape=box];
+        1 [label="Clean diffusion data (data.nii.gz)"];
+        2 [label="Brain mask (nodif_brain_mask.nii.gz)"];
+        3 [label="List of b-values (bvals)"];
+        4 [label="List of gradient orientations (bvecs)"];
+        5 [label="Which model to fit (-model)"];
+        6 [label="MCMC settings (-b, -j, -s)"];
+        7 [label="Maximum number of fibres (-n)"];
+        8 [label="BEDPOSTX"];
+        9 [label="Individual parameter estimates (merged_*.nii.gz)"];
+        10 [label="Mean parameter estimates (mean_*.nii.gz)"];
+        11 [label="Mean fibre orientations (dyad*.nii.gz)"];
+        12 [label="Uncertainty in fibre orientation (dyad*_dispersion.nii.gz)"];
+        1 -&gt; 8;
+        2 -&gt; 8;
+        3 -&gt; 8;
+        4 -&gt; 8;
+        5 -&gt; 8;
+        6 -&gt; 8;
+        7 -&gt; 8;
+        8 -&gt; 9;
+        8 -&gt; 10;
+        8 -&gt; 11;
+        8 -&gt; 12;
+        }
+    </div>
+    <p>
+        As <code>bedpostX</code> takes several hours to run (unless you run it on a GPU),
+        it has already been run for you. Let's take a look at the output.
+    </p>
+
+    <pre class="bash">cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fdt2/diffusion.bedpostX
+ls</pre>
+
+    <p>
+        Some of these files (<code>bvals</code>, <code>bvecs</code>, and <code>nodif_brain_mask.nii.gz</code>)
+        are copies from the input directory.
+        The outputs useful for visualisation are the <code>mean_*.nii.gz</code> files that contain
+        the average values for all the bedpostX parameters (the individual samples from the distribution
+        are stored in <code>merged_*.nii.gz</code> files that will be used in the probabilistic tractography, but are
+        not useful for visualization).
+    </p>
+
+    <p>
+        In addition to the mean parameters <code>bedpostX</code> also estimates the mean fibre orientation
+        for each crossing fibre (<code>dyads*.nii.gz</code>).
+        Let's first have a look at only the first fibre population.
+        Open <code>mean_f1samples</code> in FSLeyes.
+        This is the mean of the signal contribution of the first stick in the partial volume model -
+        it should look very similar to the FA map you saw in the <code>dtifit</code> practical.
+    </p>
+
+
+    <p>
+        Add <code>dyads1</code>, then open the overlay display panel
+        (<img src="gear_icon.png" class="icon"/>) and change the <b>Overlay data
+        type</b> to <em>3-direction vector image (Line)</em>.  This is the mean of the
+        distribution of fibre orientations - it should look very similar to
+        the <code>dti_V1</code> from the previous practical. You might have to zoom in to get a clear image of the fibre orientation estimates.
+    </p>
+
+    <p>
+        Let's add the crossing fibres now.
+        Add <code>mean_f2samples</code>, <code>mean_f3samples</code>,
+        <code>dyads2</code> and <code>dyads3</code> to your image.
+        Just like <code>mean_f1samples</code> tells you the estimated
+        proportion of the diffusion signal that can be accounted for by the first
+        fibre orientation, <code>mean_f2samples</code>
+        and <code>mean_f3samples</code> tell you the same for the <b>second</b>
+        and <b>third</b> orientations.
+    </p>
+
+
+    <p>
+        To have a closer look at the <code>mean_f[1-3]samples</code> files,
+        turn off all the dyads (<code>dyads1</code>, <code>dyads2</code>, and
+        <code>dyads3</code>).
+        Then change <code>mean_f2samples</code> and <code>mean_f3samples</code> to use
+        different colour maps.  Threshold both of them at 0.05 (that is, set the minimum value
+        in the display range to 0.05 - we will not actually threshold/change the data,
+        just the display).
+    </p>
+
+
+    <p>
+        You should see that in much of the white matter, there are at least two fibre
+        populations, but that in non-white matter tissue, the second and third fibres
+        have very small volume fraction (e.g., &lt;10<sup>-6</sup>). This is due to the ARD
+        (automatic relevance determination, part of the Bayesian analysis of the
+        crossing fibres). Notice that in some white matter regions where a single
+        coherent orientation is expected (e.g., corpus callosum), the second and third
+        volume fractions are also very small.
+    </p>
+
+
+    <p>
+        Now turn back on <code>dyads1</code>, <code>dyads2</code>
+        and <code>dyads3</code> and display them as line vectors
+        (<em><img src="gear_icon.png" class="icon"/> -&gt; Overlay data type -&gt;
+            3-direction vector image (Line)</em>). Change the <em>X</em>, <em>Y</em>,
+        and <em>Z Colour</em> to red for <code>dyads1</code>, to green
+        for <code>dyads2</code> and to blue for <code>dyads3</code>.  You will note
+        that there are green and blue lines everywhere (even where there is no
+        evidence for a second fibre in <code>mean_f2samples</code>), but you should
+        notice the green and blue lines are well ordered in the regions where 3 fibres
+        are supported (where <code>mean_f2samples</code>
+        and <code>mean_f3samples</code> survive the threshold), but random elsewhere.
+    </p>
+
+
+    <p>
+        In the <code>bedpostx</code> folder, there are two images called
+        <code>dyads2_thr0.05</code> and <code>dyads3_thr0.05</code>. These contain
+        average orientations only in those voxels where 2 or 3 fibres are supported
+        (i.e., their partial volumes are &gt; 0.05). You can change the
+        threshold by using the <code>maskdyads</code> command in your shell.
+    </p>
+
+
+    <p>Reopen FSLeyes with this command:</p>
+
+    <pre class="bash">fsleyes mean_fsumsamples.nii.gz \
+  dyads1.nii.gz         -ot linevector -xc 1 0 0 -yc 1 0 0 -zc 1 0 0 -lw 2 \
+  dyads2_thr0.05.nii.gz -ot linevector -xc 0 1 0 -yc 0 1 0 -zc 0 1 0 -lw 2 \
+  dyads3_thr0.05.nii.gz -ot linevector -xc 0 0 1 -yc 0 0 1 -zc 0 0 1 -lw 2</pre>
+
+    <p>
+        You should now be able to see some beautiful crossing fibre
+        architecture! The background image <code>mean_fsumsamples</code> is
+        the total volume fraction of all three sticks.
+    </p>
+
+<hr>
+<h2><a name="voxel_seed">Tractography in different spaces</a></h2>
+    <p>
+        Here we are going to look at the simplest form of tractography, where we track from a single seed voxel.
+        We will show how we can define the seed in different spaces, as long as we know the transformation from
+        the seed space to the diffusion space.
+    </p>
+
+    <p>
+        Before we start tractography let's leave the bedpostX directory:
+    </p>
+    <pre class="bash">cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fdt2</pre>
+
+<h3>Tracking from a voxel in diffusion space</h3>
+
+
+    <img style="float:right; padding:10px;" width="200" src="fdt_internal_capsule.png"
+         alt="Voxel in Internal Capsule" />
+
+
+    <p>
+        Here we will attempt to identify the tracts running through the internal capsule,
+        which is dominated by the cortico-spinal tracts.
+        In FSLeyes, open the <code>diffusion.bedpostX/mean_fsumsamples</code> map again.  Find the
+        co-ordinates of a voxel in the internal capsule (the white matter tract shown
+        in the picture; running between the caudate/thalamus and the putamen/pallidum).
+    </p>
+
+
+    <p>
+        Bring up <code class="bash">Fdt</code> - it should default
+        to <b>PROBTRACKX</b> with <em>single voxel</em> as the selected seed mode.
+    </p>
+
+
+    <p>
+        Select <code>diffusion.bedpostX</code> as the Bedpostx directory
+        and enter your selected voxel as the seed.
+    </p>
+
+    <p>
+        Choose an output name (e.g., internal_capsule), and press <b>Go</b>.
+    </p>
+
+    <p>
+        After the tractography has finished run <code class="bash">ls</code>.
+        Note that a new directory has been created with the chosen output name.
+        Check the contents of this directory (<code class="bash">ls internal_capsule</code>).
+        One useful file is <code>probtrackx.log</code>, which contains the probtrackx command
+        that was run to produce this directory. This file is useful as a reminder later on,
+        but can also be used to, for example, run the same tractography on multiple subjects.
+    </p>
+
+    <p>
+        The main output file will be named <code>basename_X_Y_Z.nii.gz</code>, where
+        <code>basename</code> is the same name as the directory and <code>X</code>,
+        <code>Y</code>, and <code>Z</code> encode the seed voxel.
+        This file contains for each voxel a count of how many of the streamlines intersected with that voxel.
+        Back in FSLeyes, add this file and change the colour map to <em>Red-Yellow</em>.
+        Adjust the min and max display thresholds until you get a good view of the main tract.
+        Note the narrowness of the spatial distribution of the tractography results
+        - this is because there is very low uncertainty in the internal capsule.
+    </p>
+
+
+    <div class="viz-graph" >
+    digraph G {
+        rankdir=LR
+        node [shape=box];
+        1 [label="basename for samples files"];
+        2 [label="binary BET mask file in diffusion space"];
+        3 [label="seed voxel coordinate (text/ascii file)"];
+        4 [label="reference vol to define seed space in simple mode"];
+        5 [label="simple mode for single seed voxel"];
+        6 [label="PROBTRACKX"];
+        7 [label="basename_X_Y_Z.nii.gz: Streamline density map from seed voxel"];
+        8 [label="probtrackx.log: Text file with probtrackx command"];
+        9 [label="fdt_coordinates.txt: Text file with coordinates"];
+        10 [label="fdt.log: Settings used in tractography"];
+        1 -> 6;
+        2 -> 6;
+        3 -> 6;
+        4 -> 6;
+        5 -> 6;
+        6 -> 7;
+        6 -> 8;
+        6 -> 9;
+        6 -> 10;
+    }
+    </div>
+
+
+<h3> Tracking from a voxel in a non-diffusion space.</h3>
+
+    <p>
+        Seed points can also be specified in a space different from the native diffusion one.
+        Here we will again run tractography from a single seed voxel, but this time
+        using a seed defined on the subject's T1-weighted image rather than in diffusion space
+    </p>
+
+    <p>
+        Open <code>structural/struct_brain</code> in a new FSLeyes window and
+        find an interesting seed location (e.g. in the corpus callosum).
+    </p>
+
+    <p>
+        In addition to the steps above (i.e., enter the input bedpostX directory,
+        enter the seed voxel, and set an output name) we now also need to define
+        the transformation between diffusion space and the space in which the seed is defined.
+        In the <code>Fdt</code> GUI, select <b>seed space is not diffusion</b>.
+        This should bring up two new fields, allowing you to specify the seed space:
+    </p>
+
+    <div class="aside">
+        The transform from diffusion to structural space can be generated using <code>epi_reg</code>.
+        <code>epi_reg</code> can register a b0 or FA map to a T1-weighted image using boundary-based
+        registration (BBR). This produces the diffusion to structural transform, as you want to opposite
+        transform you will have to invert this transform using <code>convert_xfm</code>.
+        When you run <code>epi_reg</code> on your diffusion data, don't provide any fieldmap as you would
+        for functional data, because the diffusion data has (hopefully) already been
+        distortion-corrected using <code>topup</code> and <code>eddy</code>.
+    </div>
+    <ul>
+      <li> The <em>seed-to-diff transform</em> has already been computed for you
+        and can be found in the <code>structural/xfms</code> directory (the file is called
+        <code>str2diff.mat</code>).</li>
+      <li>The <em>Seed reference image</em> is the image you selected the seed
+        point from (<code>structural/struct_brain</code>).</li>
+    </ul>
+
+    <p>
+        Run this tractography and load the output (<code>basename_X_Y_Z</code>)
+        into FSLeyes on top of the structural image (note that the output from
+        <code>probtrackX</code> is always in the same space as the seed).
+    </p>
+
+
+<h3>Tracking from voxels in MNI152 standard space</h3>
+    <p>
+        For seeds defined in standard space (e.g., from some atlas), we have an additional
+        complication that we now need to specify a non-linear rather than linear
+        transformation. To test this open <code>structural/standard_brain</code> in FSLeyes
+        and find an interesting seed location.
+    </p>
+
+    <p>
+        You can specify a non-linear transform in the Fdt GUI
+        by ticking the <em>nonlinear</em> checkbox
+        and setting <code>structural/xfms/standard2diff_warp</code> and
+        <code>structural/xfms/diff2standard_warp</code> as transforms and
+        <code>structural/standard_brain</code> as a reference image.
+        Note that the tractography output maps will be in standard space.
+        How would you compute the warps to standard space if they had not
+        already been provided for you?
+        <span class="clickme" onclick="showIt('registration')">Answer.</span>
+    </p>
+
+    <div id="registration" class="answer" style="display: none">
+        Compute a linear transform from diffusion to structural space using <code>epi_reg</code> as described above.
+        Then use <code>FNIRT</code> to register the structural image non-linearly to the MNI152 standard image.
+        Finally concatenate the two transforms using <code>convertwarp</code> to get the diffusion to standard
+        space transform. The opposite transform can be generated using <code>invwarp</code>.
+    </div>
+
+    <p>
+	Don't forget to select the bedpostX directory, enter the new seed voxel coordinates and set a name for the output directory. Then run the tractography and overlay the results on top of the standard image (with a different color map).
+    </p>
+
+    <p>
+        Seed masks are often defined in standard space rather than subject-specific space,
+        so that the same mask can be used across many subjects.
+        It is best practice in <code>probtrackX</code> to provide the transforms to standard space
+        to <code>probtrackX</code> rather than the transforming the masks to diffusion space (as
+        the latter will smooth the masks).
+    </p>
+
+<hr>
+<h2><a name="priors">Using masks to impose anatomical priors</a></h2>
+
+
+    <pre class="bash">cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fdt2</pre>
+
+
+    <p>
+        Here we will look at a more realistic example of tractography, where we do
+        not seed from a single voxel, but rather from a mask.
+        We will also use other masks to guide our tractography to reconstruct the
+        optic radiation, which connects the lateral geniculate nucleus (LGN) of the thalamus
+        to the primary visual cortex (V1).
+    </p>
+
+    <img src="fdt_meyer.gif"
+         width="150"
+         alt="Voxel in Internal Capsule" />
+
+    <p>
+        The masks have been pregenerated for you in the <code>masks</code> directory.
+        Run tractography from the LGN mask (file called
+        <code>masks/seed_LGN_left.nii.gz</code>). You will need to change the seed mode from
+        <em>single voxel</em> to <em>single mask</em>. Note that this mask is in
+        standard space, so we have to use the warp fields between standard space and diffusion space as in the example above (i.e., select <code>Seed space is not diffusion</code>, select <code>nonlinear</code> and set the appropriate transforms from the <code>structural/xfms</code> directory).  You may
+        want to reduce the number of samples to 500 to speed up tractography (under
+        the <b>Options</b> tab).
+        Set the output name to <code>optic_radiation_no_waypoint</code> and press Go.
+    </p>
+
+
+    <p>
+        Keep the <code>Fdt</code> GUI open. Now add V1 as a <em>waypoint mask</em>
+        (<code>masks/target_V1_left.nii.gz</code>) to
+        isolate only those tracts that reach V1. Use this V1 mask also as
+        a <em>termination mask</em> to avoid tracts that reach V1 and then continue to
+        other parts of the brain. Run tractography with these masks under the output name
+        <code>optic_radiation_with_waypoint</code>.
+    </p>
+
+    <p>
+        When running from a mask the output directories contain slightly different files.
+        The streamline density map is now called <code>fdt_paths.nii.gz</code>.
+        There is now also a file called <code>waytotal</code> that contains the total number
+        of <em>valid</em> streamlines run. This total should be much lower in the run with V1
+        as a waypoint mask as all the streamlines that did not reach V1 are now considered invalid.
+    </p>
+
+    <p>
+        You can check the output of both runs with:
+    </p>
+
+    <pre class="bash">fsleyes structural/standard_brain \
+    optic_radiation_no_waypoint/fdt_paths -cm blue-lightblue \
+    optic_radiation_with_waypoint/fdt_paths -cm red-yellow &</pre>
+
+    <p>
+        Find the optic radiation. Note that the results from the run with waypoints (in red) is
+        much cleaner than the run without (in blue).
+    </p>
+
+    <p>
+        Rather than defining all necessary seed, waypoint, and exclusion masks yourself, you can
+        also use Autoptx (download from <a href="fsl/fslwiki/AutoPtx.html">here</a>).
+        This tool reconstructs a large number of tracts based on seed, exclusion, and waypoint
+        masks defined in standard space. The script will also run <code>bedpostX</code> for you
+        and register the diffusion data to standard space.
+    </p>
+
+
+    <div class="quiz_question">
+
+  <span class="question">There are still some artefactual tracts in the
+  results. How can you get rid of those?</span><br/>
+
+        <form>
+            <input id="option1" class="option" type="radio" name="answer"/><label>By
+            having our subject contact a neurosurgeon</label>
+            <span id="option1" class="answer incorrect">Wrong!</span><br/>
+
+            <input id="option2" class="option" type="radio"
+                   name="answer"/><label>Using a stop mask</label>
+            <span id="option2" class="answer incorrect">Wrong! A stop mask will still
+      retain the spurious fibres.</span><br/>
+
+            <input id="option3" class="option" type="radio"
+                   name="answer"/><label>Using an exclusion mask</label>
+            <span id="option3" class="answer correct">Correct! Draw an exclusion
+      mask in FSLeyes and include it in the tractography (or use the
+      file <code>masks/EXCLUSION.nii.gz</code>).</span><br/>
+        </form>
+    </div>
+
+
+<hr>
+<h2><a name="connectivity">Estimating connectivity between brain regions</a></h2>
+    <p>
+        Above we recreated known white matter tracts by guiding the streamlines using masks.
+        Here we will look at estimating the connectivity between brain matter regions by
+        counting the number of streamlines connecting them. Whenever, you work with these streamline
+        counts keep in mind what we are actually measuring is the robustness of that connection
+        against noise, which will be affected by confounds such as tract length or the
+        presence of crossing fibres.
+        Connectivity analysis will also be affected by false positive streamlines
+        (i.e., streamlines that follow a path through the brain that does not match a true underlying tract).
+
+    </p>
+
+<h3>Connectivity between region of interests</h3>
+    <p>
+        Here the goal is to measure the connectivity between N regions of interest.
+        In the Fdt GUI this can be set up by:
+    </p>
+    <ul>
+        <li>Set the BEDPOSTX directory to <code>diffusion.bedpostX</code>.</li>
+        <li>Set <code>Seed space</code> to multiple masks and add any ROIs you want to include to the
+            <code>Masks list</code> (you can use any masks defined in the <code>masks</code> directory
+            or create your own in standard space using for example the atlases included in FSL).</li>
+        <li>As the masks have been defined in standard space, we also need to include the
+        transformations to standard space (i.e., check "Seed space is not diffusion", then check "nonlinear"
+        and then set the transforms to their appropriate files in <code>structural/xfms</code>).</li>
+        <li>Set the number of samples to 1 (in the <code>Options</code> tab) to speed up the evaluation. In reality you will not want such a low number of streamlines only to test some probtrackX command, not for any serious analysis.</li>
+        <li>Set the output directory name to something sensible.</li>
+        <li>Press <code>Go</code>.</li>
+    </ul>
+    <p>
+        The output directory still contains an image <code>fdt_paths.nii.gz</code> which shows the path
+        of the streamlines between the ROIs, but the main output for this analysis is the file
+        <code>fdt_network_matrix</code>. Run <code class="bash">cat</code> on this text file to see its contents.
+        The file contains an NxN matrix quantifying the number of streamlines between the selected ROIs that
+        can be compared across subjects.
+        Running such an analysis would typically require creating custom python or matlab scripts.
+    </p>
+    <p>
+        In this analysis we simply add up the streamlines connecting with any voxel in the region of interest.
+        To be able to segment a region of interest, we need to consider the connectivities from individual voxels
+        within each ROI. In the following sub-sections we will explore two ways of doing so.
+    </p>
+<h3>Connectivity between voxels and regions of interest: hypothesis-driven segmentation</h3>
+    <p>
+        Here we will segment the thalamus based on the connectivity with the cortex.
+        To do this we will need to estimate for every voxel in the thalamus how strongly
+        it is connected with a number of pre-defined ROIs in the cortex.
+    </p>
+
+    <p>
+        Let's first have a look at out input masks:
+    </p>
+    <pre class="bash">fsleyes structural/standard_brain.nii.gz \
+    masks/seed_thal_right.nii.gz \
+    masks/cortex_*_right.nii.gz &</pre>
+    <p>
+        Ensure that all the masks have different colours, so that you can distinguish them.
+    </p>
+
+    <p>
+        <code>seed_thal_right</code> is the seed mask and should cover the right thalamus. From each voxel
+        in this mask we are going to measure the number of streamlines connecting to the cortical regions, which
+        are defined by the other masks. To run this analysis, in the <code>Fdt</code> GUI:
+    </p>
+
+    <ul>
+        <li>Set the BEDPOSTX directory to <code>diffusion.bedpostX</code>.</li>
+        <li>Set <code>Seed space</code> to single mask and set this mask to <code>masks/seed_thal_right</code>.</li>
+        <li>Set the transformations between the seed mask (in standard space) and the diffusion space.</li>
+        <li>Set the classification masks to the different cortical lobes (i.e., all the <code>mask/cortex_*_right</code> files).</li>
+        <li>Set the number of samples to 10 (in the <code>Options</code> tab) to speed up the evaluation.</li>
+        <li>Set the output directory name to something sensible.</li>
+        <li>Press <code>Go</code>.</li>
+    </ul>
+    <p>
+        The objective of this type of analysis is to ask the following
+        question: <em>For each location in the seed mask, what is the relative
+        probability of connection to each of my target masks?</em> The output is
+        therefore a single image for each target mask in which only voxels within the
+        seed mask contain data. At each voxel within the seed mask the voxel value is
+        the number of streamlines which reached this target mask from this seed
+        voxel. These outputs can be found in the output directory as the
+        <code>seeds_to_*</code> files. Unfortunately, 10 streamlines is not enough
+        to get a reliable segmentation of the cortex, so we ran for you the
+        same tractography with 2000 streamlines per voxel, which is available
+        as the <code>THAL2CTX_right</code> directory.
+    </p>
+    <p>
+        Now overlay in FSLeyes, in turn, each of the <code>seeds_to_*</code> files
+        in <code>THAL2CTX_right</code>. Compare the spatial distributions and
+        probabilities of connection from different thalamic voxels to different
+        cortical target zones. Do you see any overlap between connectivity
+        probabilities of the different targets in the seed region? What do you
+        think this means?
+        <span class="clickme" onclick="showIt('overlap')">Answer.</span>
+    </p>
+
+    <div id="overlap" class="answer" style="display: none">
+        A specific region can be connected to multiple targets either because neurons in that region are indeed
+        connected to both targets or due to the probabilistic nature of the tractography (i.e., due to uncertainties
+        in the fibre orientation estimates).
+    </div>
+
+    <p>
+        Run <code>find_the_biggest</code> on the outputs of seeds to
+        targets to generate a hard segmentation of the thalamus and overlay
+        this segmentation onto the standard brain. Something like:
+    </p>
+
+    <pre class="bash">find_the_biggest THAL2CTX_right/seeds_to_* biggest_segmentation</pre>
+
+
+    <p>
+        The different numbers in the output image
+        (<code>biggest_segmentation</code>) each relate to a different target
+        mask. You may want to change the colour map to something like
+        <em>Random</em>.
+    </p>
+
+<h3>Dense connectome between voxels: data-driven segmentation</h3>
+    <p>
+        In both cases above the connectivity from the seed region was measured based on known
+        regions of interest. For some applications, a more precise measure of connectivity might
+        be needed, where we consider which voxels within one ROI connect with which voxels in
+        another ROI. If both ROIs cover the complete gray matter region the resulting matrix will
+        contain the connectivity between each pair of gray matter voxels (i.e., a dense connectome).
+    </p>
+    <p>
+        In <code>probtrackX</code> there are three different options to generate such a connetome.
+        Which one you need will depend on whether you want
+        the ROIs between which you will calculate the dense connectome to also function as seed matrix
+        (matrix1 or matrix2) or whether you want a different seed mask (matrix3):
+    </p>
+    <img src="MatrixOptions.png"
+         width="450"
+         alt="Different matrix output options" />
+    <p>
+        Here we will just run a simple example, which could be a first step in segmenting the thalamus
+        in a more data-driven way than above. For this we will compute the connectivity between each
+        voxel in the thalamus and each other voxel in the brain. In the Fdt GUI:
+    </p>
+    <ul>
+        <li>Set the BEDPOSTX directory to <code>diffusion.bedpostX</code></li>
+        <li>Set <code>Seed space</code> to single mask and set this mask to <code>masks/seed_thal_right</code></li>
+        <li>Set the transformations between the seed mask (in standard space) and the diffusion space.</li>
+        <li>Toggle the <code>Matrix2</code> option (in the <code>Options</code> tab
+            under <code>Matrix options</code>) and set the <code>Tract space mask</code>
+            to <code>structural/standard_brain</code>.
+        <li>Set the number of samples to 10 (in the <code>Options</code> tab) to speed up the evaluation</li>
+        <li>Set the output directory name to something sensible</li>
+        <li>Press <code>Go</code></li>
+    </ul>
+    <p>
+        Check the contents of the output directory using <code class="bash">ls</code>. A full matrix storing the connectivity
+        between each voxel in the thalamus with each voxel in the rest of the brain would be very big, so here
+        only a sparse representation is stored. In short, each voxel in the thalamus (i.e., the seed mask) is
+        assigned an index, which you can look up in the <code>coords_for_fdt_matrix2</code> file. Similarly,
+        each output voxel is assigned an index, which you can look up in
+        <code>tract_space_coords_for_fdt_matrix2</code> or in the image
+        <code>lookup_tractspace_fdt_matrix2.nii.gz</code>. Finally, the main output file
+        <code>fdt_matrix2.dot</code> contains in each row the number of streamlines (last column) connecting
+        a voxel in the thalamus (first column) with a voxel in the rest of the brain (second column).
+    </p>
+    <p>
+        This output gives us for each voxel in the thalamus the connectivity "fingerprint" with the rest
+        of the brain. As could be seen in the lecture for the medial frontal cortex, this fingerprint
+        can be used to segment the region by clustering these connectivity "fingerprints". This analysis
+        would again require custom matlab or python code and is hence beyond the scope of this practical.
+    </p>
+    <p>
+        If you have made it through the practical so far, you have explored many of the different ways to run
+        tractography in <code>probtrackX</code>. Congratulations! You can now continue with the more
+        advanced topics below or if you prefer you can continue exploring the options above by
+        reconstructing different white matter tracts or computing the connectivity profile
+        of your favorite brain region.
+    </p>
+<hr>
+
+<div class="advanced">
+<h2><a name="models">Bedpostx model specification (optional)</a></h2>
+
+
+<pre class="bash">cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fdt2</pre>
+
+
+<p>In this section we will see how the choice of the bedpostx model can affect
+the fitting results.</p>
+
+<p>We will compare model 1 (ball & sticks, single diffusion coefficient) to
+model 2 (ball and sticks, continuous gamma distribution of diffusion
+coefficients) on our multi-shell data.</p>
+
+
+<p>Model 2 should be better suited to deal with multi-shell data, as the
+apparent diffusion coefficient can change with the b-value. Using model 2
+tends to reduce overfitting (i.e., spurious fibre orientations).</p>
+
+
+<p>Open FSLeyes by typing the following command in your terminal: </p>
+
+
+<pre class="bash">
+fsleyes \
+  diffusion.bedpostX/mean_fsumsamples.nii.gz -or 0 0.8 \
+  diffusion_model1.bedpostX/mean_f2samples.nii.gz \
+    -cm blue-lightblue -or 0.05 0.2 \
+  diffusion.bedpostX/mean_f2samples.nii.gz \
+    -cm red-yellow -or 0.05 0.2 \
+  diffusion_model1.bedpostX/dyads1.nii.gz \
+    -ot linevector -xc 0 0 0 -yc 0 0 0 -zc 0 0 0 -lw 2 \
+  diffusion_model1.bedpostX/dyads2_thr0.05.nii.gz \
+    -ot linevector -xc 1 1 1 -yc 1 1 1 -zc 1 1 1 -lw 2 &
+</pre>
+
+
+<p>This loads the fitted orientations using model 1 (single diffusion
+coefficient), as well as the volume fractions of the secondary fibre
+orientation for both models 1 and 2.</p>
+
+
+<p>First, deselect the dyads files, and examine the volume fractions
+(<code>mean_f2samples</code>). Model 1 should be displayed in <em>Blue</em>
+and model 2 in <em>Red-Yellow</em>.</p>
+
+
+<p>The first thing that is immediately visible is that many more voxels survive
+a 0.05 thresholding on the volume fractions of the secondary fibre when using
+model 1. This is particularly true at interfaces between grey/white/CSF
+tissues, where partial volume is likely to occur, and it indicates that the
+model is overfitting the data.</p>
+
+
+<p>Now examine the dyads in the voxels where a secondary fibre is estimated
+when using model 1 but not model 2 (i.e., the blue voxels). You can observe
+that in most of them, especially in those closer to tissue boundaries
+(grey/white/CSF interface) the second dyad is perpendicular to the first one,
+but does not show spatial continuity when compared to neighbouring dyads.</p>
+
+
+<p>Partial volume effects can cause the signal to decay non mono-exponentially
+when increasing the b-value.  Since model 1 has a single diffusion
+coefficient, it can only capture this feature of the data by adding a
+perpendicular second dyad, which fits the data better but does not correspond
+to a genuine (anatomical) fibre orientation.</p>
+
+</div>
+
+<hr>
+
+<div class="advanced">
+<h2><a name="surfaces">Using surfaces to constrain tractography (optional)</a></h2>
+
+
+<pre class="bash">cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fdt2/surfaces</pre>
+
+
+<p>All previous examples use volumetric seeds and constraint
+masks. <code>Probtrackx2</code> also supports surface files (e.g., generated
+using <a href="https://surfer.nmr.mgh.harvard.edu">FreeSurfer</a> or
+<a href="http://brainvis.wustl.edu/wiki/index.php/Caret:About">Caret</a>).</p>
+
+
+<p>In this example use of surfaces, we consider the case where FreeSurfer has
+been used to generate a cortical surface, and show how such surface can be
+used in <code>probtrackx2</code>.</p>
+
+
+<p>In the current folder you will find the high-resolution T1-weighted volume
+produced by the FreeSurfer <code>recon-all</code> command
+(<code>orig.nii.gz</code>), the necessary transformation matrices to go from
+FreeSurfer anatomical space to diffusion space and the white/grey matter
+boundary surfaces for the left (<code>lh.cortex.gii</code>) and right
+(<code>rh.cortex.gii</code>) hemispheres. For details on how to generate these
+files, see the relevant
+<a href="fsl/fslwiki/FDT/UserGuide.html#Using_surfaces">
+documentation</a>.</p>
+
+
+<p>Here, we will see an example where, in order to avoid spurious connections
+that connect adjacent gyri, we impose the convoluted WM/GM boundary surface as
+a termination mask. Tracking will be performed again in anatomical space as
+defined by the <code>orig.nii.gz</code> volume.  We will first run an example
+without any surface constraints from a seed close to the cortex.</p>
+
+<div class="aside">
+<p>The command:</p>
+<pre class="bash">echo "97 96 125" > svox.txt</pre>
+<p>creates a text file called <code>svox.txt</code> that contains the string <b>97 96 125</b>.  This could also be created using your preferred "plain" text editor.</p>
+</div>
+
+<p>In your terminal type:</p>
+
+<pre class="bash">
+echo "97 96 125" > svox.txt
+probtrackx2 \
+  --samples=../diffusion.bedpostX/merged \
+  --mask=../diffusion.bedpostX/nodif_brain_mask.nii.gz \
+  -x svox.txt \
+  --xfm=freesurfer2fa.mat --seedref=orig.nii.gz \
+  --loopcheck --simple --forcedir \
+  --opd -V 1 --dir=Tracts --out=no_surf
+</pre>
+
+
+<p>The next commands will include as termination masks the wm/gm boundaries of
+both hemispheres:</p>
+
+
+<pre class="bash">
+echo lh.cortex.gii > stop.txt
+echo rh.cortex.gii >> stop.txt
+probtrackx2 \
+  --samples=../diffusion.bedpostX/merged \
+  --mask=../diffusion.bedpostX/nodif_brain_mask.nii.gz \
+  -x svox.txt \
+  --xfm=freesurfer2fa.mat --seedref=orig.nii.gz \
+  --loopcheck --simple --forcedir --opd -V 1 \
+  --dir=Tracts --out=surf --meshspace=freesurfer --stop=stop.txt
+</pre>
+
+
+<p>After the results have been computed, open FSLeyes with the following
+command:</p>
+
+
+<pre class="bash">
+fsleyes -ds world \
+  orig.nii.gz rh.cort.nii.gz -cm green \
+  lh.cort.nii.gz -cm copper \
+  Tracts/no_surf_97_96_125 -cm blue-lightblue -or 10 1000 \
+  Tracts/surf_97_96_125 -cm red-yellow -or 10 1000
+</pre>
+
+<p>This loads the tractography results overlaid on top of the high-resolution
+anatomical volume together with the surface boundaries. The results obtained
+when using the surfaces as termination masks should be displayed in red-yellow
+and those obtained without surface contraints should be in blue-lightblue.</p>
+
+
+<p>Go to slice <code>Y=91</code>. Observe how, when surfaces are not used as
+termination masks, the tracts in blue wrongly connect two adjacent gyri by
+passing through a sulcus.</p>
+
+</div>
+
+<hr>
+<p class="centred">The End.</p>
+</div>
+</body>
+</html>

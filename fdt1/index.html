@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html class="mozwebext"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+
+<!-- Start of Practical boilerplate. -->
+<link rel="stylesheet" type="text/css" href="../fsl/fsl.css">
+<link rel="stylesheet" type="text/css" href="../fsl/quiz.css">
+<link rel="stylesheet" type="text/css" href="../fsl/viz.css">
+
+<script type="text/javascript" src="../fsl/quiz.js"></script>
+<script type="text/javascript" src="../fsl/showhide.js"></script>
+<script type="text/javascript" src="../fsl/viz.js"></script>
+<script type="text/javascript">
+window.onload=function() {
+    setupQuizQuestions();
+    var graphs = document.querySelectorAll(".viz-graph");
+    var parser = new DOMParser;
+    for (var i = 0; i < graphs.length; i++){
+        var div = graphs[i];
+        var dom = parser.parseFromString(div.innerHTML, "text/html");
+        div.innerHTML = Viz(dom.body.textContent);
+        var svg = div.querySelector("svg");
+        svg.setAttribute("width",  "100%");
+    }
+}
+</script>
+<!-- End of Practical boilerplate. -->
+
+<title>FSL Diffusion Toolbox Practical</title>
+</head>
+<body>
+
+
+<div id="practical">
+<h1 class="centred">FSL Diffusion Toolbox Practical</h1>
+
+<p>This is the version of the FSL practical adjusted for use in PYM0FM, to be used on the CINN Nutanix Platform. Consequently, there are a few things you need to keep in mind:
+<ul>
+     <li>The data is not stored in your home folder (~/fsl_course_data), and instead it is stored in the shared pym0fm drive, located at <code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data</code>.</li>
+     <li>We are using virtual machines that are preconfigured for neuroimaging work. Our researchers typically use both FSL verion 5 and 6, and to avoid conflict we are containing version of the software in modules. When you start a new terminal session, whether you start a new analysis, or you just closed one terminal, you will have to type <code>module load fsl6.0</code>, each time.</li>
+</ul>
+</p>
+<p><center>---</center></p>
+
+<p>In this practical we will walk you through the steps needed to
+prepare your diffusion data for analysis. We will also cover diffusion
+tensor model fitting and group analysis of DTI data using
+tract-based-spatial-statistics (TBSS).
+<p></p>
+Please refer to the FSL wiki for additional information
+<a href="fsl/fslwiki/FDT/UserGuide.html" target="_blank">https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FDT/UserGuide</a>.
+Much of the diffusion toolbox can be run via either the command line or
+the FDT gui by typing <code class="bash">Fdt</code>
+(or <code class="bash">Fdt_gui</code> on a Mac). </p>
+
+
+
+<h2>Contents:</h2>
+<dl class="contents">
+
+  <dt><a href="#pipeline">The FDT DTI Pipeline</a></dt>
+  <dd>The standard FSL diffusion processing pipeline</dd>
+
+  <dt><a href="#diffdata">Diffusion Data</a></dt>
+  <dd>Familiarise yourself with diffusion data</dd>
+
+  <dt><a href="#topup">TOPUP - Correcting for Susceptibility-induced
+  Distortions</a></dt>
+  <dd>Identify EPI distortions and learn how to correct them
+  using <code>topup</code></dd>
+
+  <dt><a href="#eddy">EDDY - Correcting for Eddy Currents-induced
+  Distortions</a></dt>
+  <dd>Identify Eddy-current induced distortions and learn how to correct them
+  using <code>eddy</code></dd>
+
+  <dt><a href="#dtifit">DTIFIT - Fitting Diffusion Tensors</a></dt>
+  <dd>Fitting the diffusion tensor model to obtain scalar DTI maps (FA, MD)
+  and fibre orientation information </dd>
+
+  <dt><a href="#tbss">TBSS - Tract-Based Spatial Statistics</a></dt>
+  <dd>Whole-brain voxelwise group statistics on DTI data</dd>
+</dl>
+
+
+<hr>
+<h2><a name="pipeline">The FDT DTI Pipeline</a></h2>
+<div class="viz-graph">
+digraph G {
+  rankdir=TB
+  node [shape=box];
+  1 [label="TOPUP: Correct for susceptibility-induced distortions"];
+  2 [label="EDDY: Correct for eddy currents and subject movement"];
+  3 [label="DTIFIT: Tensor fitting"];
+  4 [label="FLIRT and FNIRT: Registration to standard space"];
+  5 [label="TBSS and RANDOMISE: Hypothesis testing"];
+  1 -&gt; 2;
+  2 -&gt; 3;
+  3 -&gt; 4;
+  4 -&gt; 5;
+}
+</div>
+
+
+<hr>
+<h2><a name="diffdata">Diffusion Data</a></h2>
+
+<p>In this first section of the practical we will familiarise ourselves with
+  diffusion data. If you are comfortable with working with diffusion data,
+  feel free to run through this section quickly or <a href="#topup"> skip to TOPUP. </a></p>
+
+<pre class="bash">cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fdt1/subj1_preproc</pre>
+
+<p>List this directory and you should see a set of files that are obtained
+from a typical diffusion MRI acquisition.
+This includes a <code>dwidata</code> file, as well as <code>bvals</code>
+and <code>bvecs</code> that contains the information on the
+diffusion-sensitising magnetic field gradients. Note that some nifti
+conversion tools will create bvals and bvecs information and some will
+not.</p>
+
+<p><code>bvals</code> contains a scalar value for each applied gradient,
+corresponding to the respective b-value.
+ <code>bvecs</code> contains a 3x1
+vector for each gradient, indicating the gradient direction.  The entries
+in <code>bvals</code> and <code>bvecs</code> are as many as the number of
+volumes in the <code>dwidata</code> file.
+So the i<sup>th</sup> volume in the data corresponds to a
+measurement obtained after applying a diffusion-sensitising gradient with a
+b-value given by the i<sup>th</sup> entry in <code>bvals</code> and a gradient
+direction given by the i<sup>th</sup>  vector in <code>bvecs</code>.
+You can quickly see the contents of
+these two files, by typing <code>cat bvals</code> and <code>cat bvecs</code>,
+respectively.
+
+<div class="quiz_question">
+  <span class="question">How many shells does this dataset have (not counting
+    the b=0)?</span><br>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"><label>6</label>
+    <span id="option1" class="answer incorrect">Wrong! It has three b-values
+    shells (500, 1500 and 2500 s/mm<sup>2</sup>).</span><br>
+
+    <input id="option2" class="option" type="radio" name="answer"><label>1</label>
+    <span id="option2" class="answer incorrect"> Wrong! It has three b-values
+    shells (500, 1500 and 2500 s/mm<sup>2</sup>).</span><br>
+
+    <input id="option3" class="option" type="radio" name="answer"><label>3</label>
+    <span id="option3" class="answer correct">Correct! Notice that the
+    actual values are not 500, 1500 and 2500 but they slightly vary
+    around those numbers. That is because, when
+    extracting the b-values from DICOM files, the converter takes into
+    account the effects of the imaging (i.e., non-diffusion encoding) gradients.</span><br>
+  </form>
+</div>
+
+<p>Ensure you are comfortable with the term "shell".</p><p>
+
+<img style="float:right; padding:10px;" src="susceptibility_artefact.png" alt="Susceptibilty induced distortions" width="200">
+
+</p><p>Bring up <code>fsleyes</code> and open <code>b1500.nii.gz</code> - you will
+need to reset the maximum display range to around 2000. This is the diffusion
+data of the b=1500 shell before correction for distortions and it is a 4D
+image.  Turn on movie mode (<img src="movie_icon.png" class="icon">). Look at
+the sagittal slice and note the movement between volumes caused by eddy
+current-induced distortions. The reason you see this as a "movement"
+is that each volume is associated with a different diffusion gradient, and
+hence different distortions.  This particular subject happened to lie very
+still, but in general you would also see "movement" due to actual
+subject movement. Notice also the susceptibility-induced distortions at the
+frontal part of inferior slices.</p>
+
+
+<p>Turn off movie mode, hide the <code>b1500</code> overlay and
+open <code>dwidata.nii.gz</code>.  Have a look through the different volumes
+(different "timepoints" in the 4D data) after setting the maximum
+display range to around 4000.</p>
+
+
+<div class="quiz_question">
+
+  <span class="question"> Which volumes had no diffusion gradient
+  applied?</span><br>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"><label>Those with very high intensity values</label>
+    <span id="option1" class="answer correct">Correct!</span><br>
+
+    <input id="option2" class="option" type="radio" name="answer"><label>Those with very low intensity values</label>
+    <span id="option2" class="answer incorrect">Wrong! The signal decays
+    exponentially only when a diffusion gradient is applied.</span><br>
+
+  </form>
+</div>
+
+<p>Now, let's have a look at all the data associated with a voxel. Choose a
+CSF voxel (e.g. [60, 63, 39]) and observe how the signal changes with gradient
+direction. To do that choose from the menu <em>View &gt; Time series</em>.  A new
+window will appear with a plot of the signal intensity at the chosen location for the
+different diffusion-weighted volumes. Notice the few high intensity values and
+the very low intensities in most of the datapoints. The former correspond to
+the b=0 images. The latter to diffusion-weighted images, for which maximal
+attenuation of the CSF signal has occurred.</p><p>
+
+
+</p><p>Notice that the higher the b-value, the lower the signal. Can you identify
+time points that correspond to the three shells used in this acquisition? 
+In the CSF most of the signal has already disappeared at a b-value of 1500, 
+so you may need to pick a voxel in grey matter to see the difference between 
+the b=1500 and the b=2500 shells. 
+Check that you are right by inspecting the bvals file (<code>cat bvals</code>).
+</p>
+
+<div class="aside">
+<h3>Changing plot colours</h3>
+<p>In order to see the plots for the different voxels in 
+different colours you need to set the colours explicitly for each plot. 
+After you have pressed the (+) button you should see an entry appear
+in the plot list (If it doesn't appear you may have to resize the
+<code>fsleyes</code> window slightly). The entry will have a colour button
+that you can press in order to change the colour of that particular plot.
+</p>
+
+</div>
+
+<p>Now, add to the plot the timeseries for a white matter voxel. To do that
+use the (+) button on the plot and choose a voxel in the corpus callosum
+(e.g. [57, 59, 44]). Can you tell and explain the differences in the data? Use
+(+) again and now choose a grey matter cortical voxel (e.g. [79, 52, 47]). Can
+you explain the differences?</p>
+
+<p style="text-align:center;"><img src="intensity_variation.png" alt="Variations in signal" width="500">
+
+<div class="quiz_question">
+
+  <span class="question"> Why is the signal in the diffusion weighted 
+images lower in CSF than GM?</span><br>
+
+  <form>
+
+    <input id="option1" class="option" type="radio" name="answer"><label>Because CSF is more affected by susceptibility
+    distortions than grey matter</label>
+    <span id="option1" class="answer incorrect">Wrong!</span><br>
+
+    <input id="option2" class="option" type="radio" name="answer"><label>Because there is more water mobility in CSF</label>
+    <span id="option2" class="answer correct">Correct! There is more water
+    mobility in the CSF (because it is a fluid) and therefore more signal
+    attenuation.</span><br>
+
+    <input id="option3" class="option" type="radio" name="answer"><label>Because there is more water mobility in GM</label>
+    <span id="option3" class="answer incorrect"> Wrong! In grey matter you
+    have several compartments that restrict the motion of water
+    molecules.</span><br>
+  </form>
+</div>
+
+
+<br>
+
+<div class="quiz_question">
+
+  <span class="question">Why is the between-volume signal variability in the 
+  diffusion weighted images higher in white matter?</span><br>
+
+  <form>
+
+    <input id="option1" class="option" type="radio" name="answer"><label>Because white matter is more isotropic than the
+    other tissues</label>
+    <span id="option1" class="answer incorrect">Wrong!</span><br>
+
+    <input id="option2" class="option" type="radio" name="answer"><label>Because white matter is more anisotropic than the
+    other tissues</label>
+    <span id="option2" class="answer correct"> Correct! Note that despite
+    signal variability being higher in WM, the mean signal is in the same
+    range of the grey matter one. This is because the mean diffusion
+    coefficients of grey and white matter are similar.</span><br>
+
+    <input id="option3" class="option" type="radio" name="answer"><label>Because white matter is more affected by
+    artefacts</label>
+    <span id="option3" class="answer incorrect"> Wrong!</span><br>
+
+  </form>
+</div>
+
+
+<p>Look again at the images. For volumes with diffusion gradients applied, see if you can work out the
+direction of the gradient. Remember that diffusion data appear darker in
+places where there is more diffusion along the gradient direction. You should be
+able to work out the gradient direction by looking at a diffusion weighted image,
+and comparing darker areas with your knowledge of white matter orientation.
+Pick an area of the brain where you know what direction the fibres go in, for
+example voxel [54 41 33], and see how the signal changes from volume to volume.
+<br>If you find it difficult to assess the direction because it is confunded by 
+different b-values you can chose instead to look at the <code>b1500.nii.gz</code> image where all the signal variation is due to direction.
+You can check if you are right - e.g for diffusion encoding
+direction for volume 4 (the fifth volume), type: </p>
+
+
+<pre class="bash">awk '{print $5}' bvecs</pre>
+
+<div class="aside">
+Note: FSLeyes starts counting from 0, and <code>awk</code> starts from 1 ! The
+awk command is extracting the 5th vector from the bvec file, which contains
+the normalized vectors giving the gradient directions in x, y and z.
+</div>
+
+</p>
+
+N.B. if you are looking at the <code>b1500.nii.gz</code> image you need to replace <code>bvecs</code> in the command above with <code>b1500.bvec</code></p>
+
+<h3>Diffusion MRI registration. </h3>
+<p>Typically the b=0 image or the FA image is used to register diffusion MRI data (i.e. to a structural scan or across
+subjects). Can you understand why this is? Why do we not use diffusion-weighted
+images? </p>
+
+
+
+
+<hr>
+<h2><a name="topup">TOPUP - Correcting for Susceptibility-induced
+Distortions </a></h2>
+
+<p> FSL wiki: <a href="fsl/fslwiki/topup.html" target="_blank">https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/topup</a>
+
+<pre class="bash">cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fdt1/subj1_preproc</pre>
+
+<p>A minimum requirement for using <code>topup</code> for correcting
+distortions is that two spin-echo (SE) EPI images with different PE-directions
+have been acquired. The best is to acquire them with opposing PE-directions
+(i.e. A→P AND P→A or L→R AND R→L). An SE-EPI image is the
+same as a b=0 image acquired as a part of a diffusion protocol.
+Just as for fieldmaps this pair must be acquired at the same occasion as the
+full diffusion protocol and the subject must not leave the scanner in between
+and no re-shimming can be done.</p>
+
+<p></p>
+
+<h3>Identifying susceptibility-induced distortions</h3>
+
+<p>From the <code>dwidata</code> choose a volume without diffusion
+weighting
+(e.g. the first volume). You can now extract this as a standalone 3D
+image,
+using fslroi. Figure out this command by yourself. Typing fslroi
+into the terminal will produce instructions on how to use fslroi. Call
+the extracted file <code>nodif</code>.</p>
+
+<p>
+  <span class="clickme" onclick="showIt('c1')">
+    <sup><a id="en0">*</a></sup>Reveal command
+  </span>
+</p>
+
+<div class="answer" id="c1" style="display: none;">
+  <p>
+    <pre class="bash">fslroi dwidata nodif 0 1</pre>
+  </p>
+</div>
+
+
+<p>Open <code>nodif</code> in
+FSLeyes and have a look at different slices.  Notice that as you go to more
+inferior slices, the frontal part of the brain starts to appear distorted
+(e.g. "squashed" or "elongated"). These distortions are
+always present in EPI images and are caused by differences in the magnetic
+susceptibilities of the areas being imaged.</p><p>
+
+</p><div class="quiz_question">
+
+  <span class="question"> In this data, the phase encoding was along which axis? Hint: we can infer this by looking at the imaging distortions.</span><br>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"><label>Right→Left</label>
+    <span id="option1" class="answer incorrect">Wrong! Along which axis do you see image distortions?</span><br>
+
+    <input id="option2" class="option" type="radio" name="answer"><label>Anterior→Posterior</label>
+    <span id="option2" class="answer correct">Correct! The image distortions are present along the
+phase-encoding (PE) direction used in the acquisition and their sign changes
+with the sign of the PE direction that has been used. Here, the <code>dwidata</code>
+have been acquired with an Anterior→Posterior PE direction.<p></p></span><br>
+
+    <input id="option3" class="option" type="radio" name="answer"><label>Inferior→Superior</label>
+    <span id="option2" class="answer incorrect">Wrong! Along which axis do you see image distortions?</span><br>
+
+  </form>
+</div>
+
+
+
+<p>Now open and superimpose in FSLeyes the image <code>nodif_PA</code>. This
+is an image without diffusion-weighting (i.e.  b=0) of the same subject that
+has been acquired with the opposite PE direction
+(Posterior→Anterior). Switch on and off the visibility of this image to
+see how the distortions change sign between <code>nodif</code>
+and <code>nodif_PA</code>.  Regions that are squashed in the first appear
+elongated in the second and vice versa. Unsurprisingly the areas that were
+very obviously distorted when viewed in the <code>nodif</code> image changes a
+lot as you switch back and forth between <code>nodif</code>
+and <code>nodif_PA</code>. Perhaps more disturbing is that some areas that
+didn't appear obviously distorted do too, meaning that these are also
+distorted, only not quite so obvious. For example look at the Cerebellum in a
+sagittal view at /storage/silver/pym0fm/&lt;your DTS login&gt;x=58 as you switch back and forth. We will correct these
+distortions by combining the two b=0 images using the TOPUP tool. We will then
+pass the results on to the EDDY tool where it will be applied to the
+correction of all diffusion data. </p>
+
+
+<h3>Running topup</h3>
+
+
+<p>First you need to merge the AP and PA images into a single image
+using fslmerge. Again, typing fslmerge into the command line will bring
+up helpful instructions. Merge the files along the 4th 'timeseries'
+axis. Call the merged image AP_PA_b0.</p>
+
+<p>
+  <span class="clickme" onclick="showIt('c2')">
+    <sup><a id="en0">*</a></sup>Reveal command
+  </span>
+</p>
+
+<div class="answer" id="c2" style="display: none;">
+  <p>
+    <pre class="bash">fslmerge -t AP_PA_b0 nodif nodif_PA</pre>
+  </p>
+</div>
+
+<p>Then create a text file that contains the information with the PE
+direction, the sign of the AP and PA volumes and some timing information
+obtained by the acquisition. This file has already been created
+(<code>acqparams.txt</code>), and is a text-file that contains</p>
+
+
+<pre class="listing">0 -1 0 0.0759
+0  1 0 0.0759
+</pre>
+
+
+<p>The first three elements of each line comprise a vector that specifies the
+direction of the phase encoding. The non-zero number in the second column
+means that is along the <em>y</em>-direction. A -1 means that <em>k</em>-space was
+traversed Anterior→Posterior and a 1 that it was traversed
+Posterior→Anterior.  The final column specifies the "total readout
+time", which is the time (in seconds) between the collection of the
+centre of the first echo and the centre of the last echo. In the FAQ section
+of the online help for <code>topup</code> there are instructions for how to
+find this information for Siemens scanners. Don't worry if you can't find the 
+"total readout time" for your own data: you can <i>almost</i> always use 0.05.</p>
+
+
+<p>The file should contain as many entries as there are volumes in the image
+file that is passed to <code>topup</code>.</p>
+
+
+<p>We are now ready to run <code>topup</code> which we would do with the command:</p>
+
+<pre class="dontrun">topup --imain=AP_PA_b0 \
+      --datain=acqparams.txt \
+      --config=b02b0.cnf \
+      --out=topup_AP_PA_b0 \
+      --iout=topup_AP_PA_b0_iout \
+      --fout=topup_AP_PA_b0_fout
+</pre>
+
+
+<div class="viz-graph">
+    digraph G {
+      rankdir=LR
+      node [shape=box];
+      1 [label="input filename
+(--imain=AP_PA_b0)"];
+      2 [label="text file with PE directions/times
+(--datain=acqparams.txt)"];
+      3 [label="configuration file specifying command line arguments
+(--config=b02b0.cnf)"];
+      4 [label="file with unwarped images
+(--iout=topup_AP_PA_b0_iout)"];
+      5 [label="file with field (Hz)
+(--fout=topup_AP_PA_b0_fout)"];
+      6 [label="TOPUP"];
+      7 [label="basename of output files
+(--out=topup_AP_PA_b0)
+outputs: spline coefficients (Hz) and movement parameters"];
+      1 -&gt; 6;
+      2 -&gt; 6;
+      3 -&gt; 6;
+      6 -&gt; 4;
+      6 -&gt; 5;
+      6 -&gt; 7;
+    }
+</div>
+
+<div class="aside">
+<h3>Apply topup</h3>
+<p><code>applytopup</code> can be used to apply the field calculated
+by <code>topup</code> to one or more different image volumes, thereby correcting the
+susceptibility distortions in those images. For example, we could use it to inspect
+how well <code>topup</code> managed to correct our b0 data by running:</p>
+
+<pre class="dontrun">applytopup --imain=nodif,nodif_PA \
+           --topup=topup_AP_PA_b0 \
+           --datain=acqparams.txt \
+           --inindex=1,2 \
+           --out=hifi_nodif
+</pre>
+
+<p>This will generate a file named <code>hifi_nodif.nii.gz</code> where both
+input images have been combined into a single distortion-corrected image.</p>
+</div>
+
+<p>However, this will take too long to run so instead copy the "pre-baked" results into your working directory with:</p>
+
+
+<pre class="bash">cp pre_baked/topup_AP_PA_b0* .</pre>
+
+
+<p>There are four result files. <code>topup_AP_PA_b0_fieldcoef.nii.gz</code>
+contains information about the off-resonance field and
+<code>topup_AP_PA_b0_movpar.txt</code> specifies any movement
+between <code>nodif</code> and <code>nodif_PA</code>. Open FSLeyes and
+load <code>topup_AP_PA_b0_fieldcoef.nii.gz</code>.
+It looks like a low resolution fieldmap, and it contains the spline
+coefficients for the field that TOPUP has
+estimated. Close FSLeyes and re-open it, but this time
+take a look at the actual field (<code>topup_AP_PA_b0_fout</code>).
+Moreover, to check that TOPUP has done its job properly, load
+<code>topup_AP_PA_b0_iout</code> and compare its two volumes to those we
+provided as input (<code>AP_PA_b0.nii.gz</code>).</p>
+
+
+
+<hr>
+<h2><a name="eddy">EDDY - Correcting for Eddy Currents</a></h2>
+
+<p> FSL wiki: <a href="fsl/fslwiki/eddy.html" target="_blank">https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/eddy</a> </p>
+
+
+<p>We will first generate a brain mask using the corrected b0. We compute the
+average image of the corrected b0 volumes using fslmaths. Figure out the correct command, calling the output file hifi_nodif.</p>
+
+<p>
+  <span class="clickme" onclick="showIt('c3')">
+    <sup><a id="en0">*</a></sup>Reveal command
+  </span>
+</p>
+
+<div class="answer" id="c3" style="display: none;">
+  <p>
+    <pre class="bash">fslmaths topup_AP_PA_b0_iout -Tmean hifi_nodif</pre>
+    Ensure you understand why we use -Tmean
+  </p>
+</div>
+
+
+<p>And then we use BET on the averaged b0. Again figure out the command
+and call the output file hifi_nodif_brain. Hint: create a binary brain
+mask, with a fraction intensity threshold of 0.2.</p>
+
+<p>
+  <span class="clickme" onclick="showIt('c4')">
+    <sup><a id="en0">*</a></sup>Reveal command
+  </span>
+</p>
+
+<div class="answer" id="c4" style="display: none;">
+  <p>
+    <pre class="bash">bet hifi_nodif hifi_nodif_brain -m -f 0.2</pre>
+  </p>
+</div>
+
+
+<p>You can then use FSLeyes to ensure that <code>bet</code> has done a good
+job.</p>
+
+
+<h3>Running EDDY</h3>
+
+
+<p>Now we would typically run <code>eddy</code>, either through the FDT gui
+  (by typing <code class="bash">Fdt</code> or <code class="bash">Fdt_gui</code> on a Mac),
+  or with the command:</p>
+
+
+<pre class="dontrun">eddy --imain=dwidata \
+     --mask=hifi_nodif_brain_mask \
+     --index=index.txt \
+     --acqp=acqparams.txt \
+     --bvecs=bvecs \
+     --bvals=bvals \
+     --fwhm=0 \
+     --topup=topup_AP_PA_b0 \
+     --flm=quadratic \
+     --out=eddy_unwarped_images \
+     --data_is_shelled
+</pre>
+
+
+<div class="viz-graph">
+    digraph G {
+      rankdir=LR
+      node [shape=box];
+      1 [label="list of input images
+(--imain=dwidata)"];
+      2 [label="mask image
+(--mask=hifi_nodif_brain_mask)"];
+      3 [label="indices for all volumes text file
+(--index=index.txt)"];
+      4 [label="acquisition parameters text file
+(--acqp=acqparams.txt)"];
+      5 [label="b-vectors for all volumes in --imain
+(--bvecs=bvecs)"];
+      6 [label="b-values for all volumes in --imain
+(--bvals=bvals)"];
+      7 [label="base name for output files from topup
+(--topup=topup_AP_PA_b0)"];
+      8 [label="other options"];
+      9 [label="EDDY"];
+      10 [label="basename for outputs
+(--out=eddy_unwarped_images)"];
+      1 -&gt; 9; 2 -&gt; 9; 3 -&gt; 9; 4 -&gt; 9; 5 -&gt; 9; 6 -&gt; 9; 7 -&gt; 9; 8 -&gt; 9; 9 -&gt; 10;
+    }
+</div>
+
+
+<p>In this command:</p>
+
+<ul>
+  <li><code>dwidata</code> is the full diffusion data (including <em>b</em>=0
+    volumes), all acquired with a Anterior→Posterior phase-encoding.</li>
+
+  <li>The text-file <code>index.txt</code> contains a column of ones, one for
+    each volume in <code>dwidata</code>, specifying that all volume were
+    acquired with the parameters specified by the first row
+    in <code>acqparams.txt</code>.</li>
+
+  <li><code>topup_AP_PA_b0</code> was the name given as the <code>--out</code>
+    parameter when we ran <code>topup</code> and will cause <code>eddy</code>
+    to look for the files <code>topup_AP_PA_b0_fieldcoef.nii.gz</code> and
+    <code>topup_AP_PA_b0_movpar.txt</code>. </li>
+
+  <li>The parameters <code>--fwhm=0</code> and <code>--flm=quadratic</code>
+    specify that no smoothing should be applied to the data and that we assume
+    a quadratic model for the EC-fields. These are our current recommendations
+    and you are unlikely to ever have to use any other settings.</li>
+
+   <li>Lastly, the <code>--data_is_shelled</code> flag is set to avoid the
+    automatic checking on whether the data has been acquired using a
+    multi-shell protocol (we already know that is indeed the case for this
+    dataset). </li>
+</ul>
+
+<p>As <code>eddy</code> performs a simultaneous registration of all volumes in
+the data set it is quite memory and CPU hungry.  Therefore copy the
+pre-calculated results into your working directory with: </p>
+
+<pre class="bash">cp pre_baked/eddy_unwarped_images* .</pre>
+
+<p>You will find that <code>eddy</code> has produced three output
+files: <code>eddy_unwarped_images.nii.gz</code>,
+<code>eddy_unwarped_images.rotated_bvecs</code>
+and <code>eddy_unwarped_images.eddy_parameters</code>. The former of those is
+the "main result" and contains the data in <code>dwidata</code>
+corrected for susceptibility, eddy currents and subject movements.</p>
+
+
+<p>We suggest that you load both <code>b1500.nii.gz</code> and
+<code>eddy_unwarped_images_b1500.nii.gz</code> into FSLeyes (N.B. <code>eddy_unwarped_images_b1500.nii.gz</code> was not generated automatically by <code>eddy</code>, but was created using the <code>select_dwi_vols</code> command on the <code>eddy</code> otput). 
+Set the maximum
+display range for both images to around 2000, make sure that the <em>chain link</em>
+icon (<img src="chainlink_icon.png" class="icon">) is turned on for both overlays in the
+<em>Overlay List</em> panel, then turn on movie mode
+(<img src="movie_icon.png" class="icon">). The <em>chain link</em> option will
+group the display settings for the two selected images.  By toggling the
+visibility of the <b>top</b> data set you can see the difference before and
+after <code>eddy</code>. </p>
+
+
+<h3>Data acquisition requirements for eddy (optional)</h3>
+
+
+<p>
+  <span class="clickme" onclick="showIt('eddyacq')">
+    <sup><a id="en0">*</a></sup>Read this either if you will be acquiring data on which
+    you hope to run eddy, or if you want to to solidify your knowledge.
+  </span>
+</p>
+
+<div class="answer" id="eddyacq" style="display: none;">
+  <p><code>eddy</code> needs to be able to distinguish between signal
+  variation caused by diffusion and that caused by eddy
+  currents/movements. There are two ways of doing this. One is to acquire
+  each
+  diffusion direction twice with opposing phase-encode directions.  This
+  has the
+  disadvantage of prolonging the total acquisition, but if one is anyway
+  acquiring more than one repetition (for SNR purposes) it is a good idea
+  to
+  acquire the two repetitions with different phase-encodes.  The other,
+  not
+  mutually exclusive, option is to make sure that the diffusion is sampled
+   on
+  the whole sphere.  This is as opposed to on the half sphere, which many
+  existing diffusion schemes are optimised for.
+
+  </p><div class="quiz_question2">
+
+  <span class="question">What 'sphere' are we talking about here?</span><br>
+
+  </div>
+
+
+
+   From a diffusion perspective it doesn't matter if diffusion is measured along <b>g</b> or along -<b>g</b>, but
+  from a distortion perspective the two will be each other's polar
+  opposites. This means that if <b>g</b><sub>1</sub> and <b>g</b><sub>2</sub>
+  are two diffusion vectors with a small angle between them (i.e. they have
+  similar diffusion information) it is better to instead
+  use <b>g</b><sub>1</sub> and - <b>g</b><sub>2</sub>. This will produce a sampling schemes which samples the diffusion evenly and equaly well, but now across the whole sphere.
+
+  There are examples of
+  diffusion schemes on the whole and half sphere in the online help for
+  <code>eddy</code>. <p></p>
+
+  <div class="quiz_question2">
+
+  <span class="question">Why do the vectors g1 and g2 in our explanation need to have only a small angle between them?</span><br>
+
+  </div>
+
+  <p>In general, the data requirements for <code>eddy</code> do not need to
+  increase the acquisition time and they are completely compatible with the
+  "diffusion requirements". Hence, it doesn't cost anything to do
+  it. However, data that has not been acquired according to those requirements
+  are unlikely to be perfectly corrected by <code>eddy</code> so it is better
+  to think/ask before, rather than after, the acquisition. Please refer
+  to the
+  <a href="fsl/fslwiki/eddy.html#If_you_haven.27t_already_acquired_your_data" target="_blank">wiki
+  page</a> for further suggestions/recommendations.</p>
+
+
+  <p>One way of ensuring a direction set that is optimal both for diffusion and
+  <code>eddy</code> is to use the FSL <code>gps</code> command. If you
+  for example want to have a 64 direction diffusion protocol that
+  <code>eddy</code> will work well on you can type:</p>
+
+
+  <pre class="dontrun">gps --ndir=64 --optws --out=my.bvecs</pre>
+
+
+  <p>Then <code>my.bvecs</code> will be a text-file with optimal diffusion
+  directions, evenly spaced across the sphere. You will need to complement it with any <em>b</em>=0 volumes you
+  want to intersperse.</p>
+
+</div>
+
+
+<h3>A note on quality control: EDDY QC</h3>
+<p> As we have seen, dMRI data can be affected by many hardware or
+subject-specific artefacts. If undetected, these artefacts can bias
+downstream analysis. Quality control is therefore very important -
+always look at your data! In large population studies, manual quality
+control may not be practical. A new FSL tool EDDY QC provides automatic
+quality control at both the single subject and group level. For more
+info see </p><p> FSL wiki: <a href="fsl/fslwiki/eddyqc.html" target="_blank">https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/eddyqc</a> . </p>
+
+<hr>
+<h2><a name="dtifit">DTIFIT - fitting diffusion tensors</a></h2>
+
+<pre class="bash">cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fdt1/subj1</pre>
+
+
+<p>The directory already contains <code>bvals, bvecs</code>,
+distortion-corrected data file named <code>data</code> and a brain mask named
+<code>nodif_brain_mask</code>. These are the four files that a standard FDT
+directory should be comprised of, before running <code>dtifit</code> or any
+further data analysis. The files are a sub-set of the data we have been
+working on so far, comprising only b=0 and b=1500 volumes. Here we select a single shell
+as the tensor is not a good model for multi-shell data.</p>
+
+
+<div class="aside">
+  <p><code>select_dwi_vols</code> is the tool to extract volumes with specific b-values from a
+  4D diffusion-weighted dataset.  For example:</p>
+
+  <pre class="dontrun">select_dwi_vols \
+    eddy_unwarped_images.nii.gz \
+    bvals \
+    dti_data \
+    0 \
+    -b 1500 \
+    -obv eddy_unwarped_images.eddy_rotated_bvecs
+  </pre>
+
+  <p>This command will create a new 4D file containg only those volumes with b-values /storage/silver/pym0fm/&lt;your DTS login&gt;=0 and /storage/silver/pym0fm/&lt;your DTS login&gt;=1500. It will also
+    generate two new <code>bvals</code> and
+    <code>bvecs</code> files containing only the selected b-values and b-vectors.
+  </p>
+</div>
+
+
+<p>You can run DTIFIT (the FSL diffusion tensor fitting program) in one of
+three ways, all described below. Choose <b>one</b> of these approaches:</p>
+
+
+<h4>1: Run DTIFIT on a FDT directory</h4>
+
+<p>Open the FDT GUI by typing <code class="bash">Fdt</code>
+(or <code class="bash">Fdt_gui</code> on a Mac), and select
+<b>DTIFIT</b> from the main menu (the button in the top that initially
+says <b>PROBTRACKX</b>).</p>
+
+
+<p>You can run DTIFIT on a standard FDT directory by selecting the input
+directory (<code>subj1</code> - go up one directory in the file browser to be
+able to select this) and then pressing <b>Go</b>. NB: When DTIFIT has finished
+running via the GUI, a small dialogue window will pop up saying <b>Done!</b>
+You must press <b>Ok</b> to close this window before closing the main FDT GUI
+otherwise you will recieve an error message (beware: this dialogue can pop up
+in a completely different and unexpected part of the screen).</p>
+
+
+<h4>2: Run DTIFIT by manually specifying the input files</h4>
+
+<p>Open the FDT GUI by typing <code class="bash">Fdt</code>
+(or <code class="bash">Fdt_gui</code> on a Mac), and select
+<b>DTIFIT</b> from the main menu (the button in the top that initially
+says <b>PROBTRACKX</b>).</p>
+
+<p>You can select the input files manually by clicking
+<b>Specify input files manually</b>, then select the following files
+for the relevant tabs: </p>
+
+<!--
+<dl class="horiz-ital">
+  <dt>Diffusion weighted data</dt>
+  <dd>data</dd>
+  <dt>BET binary brain mask</dt>
+  <dd>nodif_brain_mask</dd>
+  <dt>Output basename</dt>
+  <dd>dti</dd>
+  <dt>Gradient directions</dt>
+  <dd>bvecs</dd>
+  <dt>b values</dt>
+  <dd>bvals</dd>
+</dl>
+-->
+
+<ul>
+  <li><b>Diffusion weighted data</b>: &nbsp; <code>data</code></li>
+  <li><b>BET binary brain mask</b>: &nbsp; <code>nodif_brain_mask</code></li>
+  <li><b>Output basename</b>: &nbsp; <code>dti</code></li>
+  <li><b>Gradient directions</b>: &nbsp; <code>bvecs</code></li>
+  <li><b>b values</b>: &nbsp; <code>bvals</code></li>
+</ul>
+
+<p>When you have entered all of the file name, press <code>Go</code>.</p>
+
+
+<h4>3: Call <code>dtifit</code> from the command line. Try to figure out this command yourself. Name the output files dti.</h4>
+
+<p>
+  <span class="clickme" onclick="showIt('c5')">
+    <sup><a id="en0">*</a></sup>Reveal command
+  </span>
+</p>
+
+<div class="answer" id="c5" style="display: none;">
+  <p>
+    <pre class="bash">dtifit --data=data --mask=nodif_brain_mask \
+  --bvecs=bvecs --bvals=bvals --out=dti</pre>
+  </p>
+</div>
+
+
+<div class="viz-graph">
+    digraph G {
+      rankdir=LR node [shape=box];
+      1 [label="dti data
+(--data=data)"];
+      2 [label="binary mask
+(--mask=nodif_brain_mask)"];
+      3 [label="b vectors
+(--bvecs=bvecs)"];
+      4 [label="b values
+(--bvals=bvals)"];
+      5 [label="DTIFIT"];
+      6 [label="basename for outputs
+(--out=dti)"];
+      1 -&gt; 5;
+      2 -&gt; 5;
+      3 -&gt; 5;
+      4 -&gt; 5;
+      5 -&gt; 6;
+    }
+</div>
+
+<h3> DTI output </h3>
+
+<p>When you have run <code>dtifit</code> using any of these three ways,
+load the anisotropy map <code>dti_FA</code> into FSLeyes</p>
+
+<div class="quiz_question">
+
+  <span class="question">Note the areas with high diffusion anisotropy where
+  the FA is greater than 1. Why might that happen?</span><br>
+
+  <form>
+
+    <input id="option1" class="option" type="radio" name="answer"><label>The
+    diffusion weighted signal decayed too fast</label>
+    <span id="option1" class="answer incorrect">Wrong!</span><br>
+
+    <input id="option2" class="option" type="radio" name="answer"><label>Some
+    eigenvalues are negative</label>
+
+    <span id="option2" class="answer correct">Correct! In theory, a negative
+    eigenvalue means that there is an orientation along which the diffusion
+    coefficient is <em>negative</em>. This is physically impossible. For
+    example, it means that if we were to measure diffusion weighted signal
+    along that direction, then more diffusion weighting <em>increases</em> the
+    signal (instead of decreasing it).  This can happen in practice, e.g. with
+    poor SNR or head motion. In DTIFIT, the tensor is calculated with no
+    positivity constraints on the eigenvalues, so situations where FA &gt; 1
+    may happen in practice.</span><br>
+
+    <input id="option3" class="option" type="radio" name="answer"><label>The
+      microstructural compartments in those areas are very small and they
+      restrict water molecules diffusion too much</label>
+    <span id="option3" class="answer incorrect"> Wrong! In grey matter you
+    have several compartments that restrict the motion of water
+    molecules.</span><br>
+
+  </form>
+</div>
+
+<p>Add the principal eigenvector map to your display:
+<em>File -&gt; Add from file -&gt; dti_V1</em>
+</p>
+
+
+<p>FSLeyes should open the image as a <em>3-direction vector image
+(RGB)</em>. Diffusion direction is now coded by colour. For a more interpretable image,
+we can modulate the colour intensity with the FA map so anisotropic
+voxels appear bright. In the display panel (<img src="gear_icon.png" class="icon">) change the <b>Modulate by</b> setting
+to <code>dti_FA</code>. You may wish to adjust the brightness and contrast
+settings. </p>
+
+
+<p>Change the <b>Modulate by</b> setting back to <em>None</em>, and then
+change the <b>Overlay data type</b> to <em>3-direction vector image
+(Line)</em>. Zoom in and out of your data. You should see clear white matter
+pathways through the vector field.</p>
+
+
+<p>Finally, change the <b>Overlay data type</b> to <em>3D/4D volume</em>. The
+image should now look quite messy - you are looking at the first (X) component
+(the first volume) of the vector in each voxel. The second and third volumes
+contain the Y and Z components of the vector.</p>
+
+
+<p>Now load the Mean Diffusivity map (<code>dti_MD</code>) and the map of
+the first eigenvalue (<code>dti_L1</code>) into
+FSLeyes. Change the minimum/maximum display range values to 0 and 0.002
+respectively for both images.</p>
+
+<p>Compare the values of MD and L1 in CSF, white and gray matter.</p>
+<p>
+  <span class="clickme" onclick="showIt('c6')">
+    <sup><a id="en0">*</a></sup>What should I look at?
+  </span>
+</p>
+
+<div class="answer" id="c6" style="display: none;">
+  <p>
+    Observe how uniform the MD appears in both gray and white matter
+    areas. Higher intensities in the CSF-filled areas indicate larger diffusivity
+    - on average -, due to the absence of barriers to water molecule motions. Now
+    load the principal DTI eigenvalue <code>dti_L1</code>. Larger values exist in
+    white matter regions compared to gray matter.
+  </p>
+</div>
+
+
+<p>Next, load the secondary eigenvalue <code>dti_L2</code> and see how L2 is lower in the white matter. Try also <code>dti_L3</code>. The
+contrast between white and gray matter is even larger, with much lower values
+being observed in the former. In contrast, L1, L2 and L3 do not vary that much
+in the gray matter (or in the CSF). These differences between L1, L2 and L3
+give rise to diffusion anisotropy and lead to high FA values in the white
+matter and low FA in the gray matter. Keep in mind the diffusion tensor
+ellipsoid for a pictorial representation of the DTI eigenvalues. </p>
+
+<p>We also have files named <code>dti_V2</code> and <code>dti_V3</code>. What are these?</p>
+
+<p>
+  <span class="clickme" onclick="showIt('v1v2')">
+    <sup><a id="en0">*</a></sup>Answer
+</p>
+
+
+<div class="answer" id="v1v2" style="display: none;">
+  <p>
+    These vectors
+    along with <code>dti_V1</code> define a local coordinate system for each
+    voxel, so that V1 points along the PDD (principal diffusion direction). L1, L2
+    and L3 are the diffusivities along directions V1, V2 and V3,
+    respectively. However, only V1 can be associated with the underlying fibre
+    orientations, as shown by the colour maps before. V2 and V3 are simply
+    perpendicular to this orientation, with V3 pointing towards the direction of
+    lowest diffusivity on the plane perpendicular to V1.  </p>
+</div>
+
+
+<h3> Visualising the tensor in fsleyes (optional) </h3>
+<p>In addition to displaying the principal eigenvector (<code>dti_V1</code>)
+of the tensor model fit, FSLeyes has the ability to display the full tensor
+model fit in each voxel. To do this, choose <em>File -&gt; Add from
+directory</em> and select the <code>subj1</code> directory. Bring up the
+overlay display panel (<img src="gear_icon.png" class="icon">) and increase
+the tensor size and ellipsoid quality to improve visualization.  You can now
+see the whole tensor elliposid colour-coded according to its PDD. In the
+overlay display panel, you can also choose to colour the ellipsoid using one
+of the loaded scalar maps (e.g., FA). Do that and select <em>Colour Map -&gt;
+Hot</em>.  It is now easier to see which white matter areas are more
+anisotropic than others and how this gets reflected by the shape of the tensor
+ellipsoid.</p>
+
+
+
+<hr>
+<h2><a name="tbss">TBSS - Tract-Based Spatial Statistics</a></h2>
+
+<p> FSLwiki: <a href="fsl/fslwiki/TBSS.html" target="_blank">https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/TBSS</a>. </p>
+
+<p>So far, we have stepped through the steps required to pre-process a
+typical diffusion-weighted data. The final part of the tutorial focusses
+ on running TBSS to compare FA values between two groups of
+participants.</p>
+
+
+<p>We will now run a TBSS analysis of a small dataset - 3 young people (mean
+age 25) and 3 older people (mean age 65). We will attempt to find where on the
+tract skeleton the two groups of subjects have significantly different FA.</p>
+
+
+<h3>1. Creating FA data from a diffusion study</h3>
+
+
+<p>We have already created the FA images from the 6 subjects, using
+dtifit. </p>
+
+
+<pre class="bash">cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/fdt1/tbss</pre>
+
+
+<p>Remember that all of the main scripts (until you reach the
+<code>randomise</code> stage near the end) need to be run from within this
+directory.</p>
+
+
+<h4>LOOK AT YOUR DATA</h4>
+
+
+<ul>
+  <li>Open one image with FSleyes to get a feel for the raw data quality and
+    resolution. You may need to adjust the intensity display range. Look at
+    the image histogram (<em>View -&gt; Histogram</em>).</li>
+
+  <li>Run <code>slicesdir *.nii.gz</code> and open the resulting web page
+    report; this is a quick-and-dirty way of checking through all the original
+    images.</li>
+</ul>
+
+
+<hr>
+<h3>2. Preparing your FA data for TBSS</h3>
+
+
+<p>We must first run an additional pre-processing script which will erode
+your FA images slightly to remove brain-edge artifacts and zero the end slices
+(again to remove likely outliers from the diffusion tensor
+fitting). Type: </p>
+
+
+<pre class="bash">tbss_1_preproc *.nii.gz</pre>
+
+
+<p>The script places its output in a newly-created sub-directory called
+<code>FA</code>. It will also create a sub-directory called
+<code>origdata</code> and place all your original images in there for
+posterity. </p>
+
+
+<h4>LOOK AT YOUR DATA</h4>
+<p> Check the images created in the FA directory. The <code>tbss_1_preproc</code> script will have re-run
+<code>slicesdir</code> on the preprocessed FA maps - open this report
+(you can find it in <code>FA/slicesdir/index.html</code>) and compare it
+to the <code>slicesdir</code>report you created earlier.</p>
+
+
+<hr>
+<h3>3. Registering all the FA data</h3>
+
+
+<p>The next TBSS script runs the nonlinear registration, aligning all the FA
+data across subjects. The recommended approach is to align every FA image to
+the FMRIB58_FA template. This process can take a long time, as each
+registration takes around 10 minutes. You can easily speed this up if you have
+multiple computers running cluster software such as SGE (Sun Grid Engine). To
+save time, we have pre-computed all the alignments for you, so instead of
+running the TBSS script <code>tbss_2_reg</code>, make sure you are still in
+the directory one level above <code>FA</code>, and run:</p>
+
+
+<pre class="bash">cp precomputed_registration/* FA</pre>
+
+
+<p>This puts the necessary registration output files into FA, as if you had
+run the registration yourself.</p>
+
+
+<hr>
+<h3>4. Post-registration processing</h3>
+
+
+<p>Before reading this section, start the next script running so that you can
+read what's going on while it runs (it will take about 5 minutes): </p>
+
+
+<pre class="bash">tbss_3_postreg -S</pre>
+
+
+<p>The previous script (<code>tbss_2_reg</code> - we ran this for you) only
+got as far as registering all subjects to the chosen
+template. The <code>tbss_3_postreg</code> script applies these registrations
+to take all subjects into 1x1x1mm standard space. </p>
+
+
+<p>The script then merged all of the subjects' standard space nonlinearly aligned images
+into a single 4D image file called <code>all_FA</code>, created in a new
+subdirectory called <code>stats</code>. The mean of all FA images is created,
+called <code>mean_FA</code>, and this is then fed into the FA skeletonisation
+program to create <code>mean_FA_skeleton</code>. </p>
+
+
+<p>Once the script has finished running, check that the mean FA image looks
+reasonable, and is well aligned with the MNI152 image: </p>
+
+
+<pre class="bash">cd stats
+fsleyes -std1mm mean_FA -cm red-yellow -dr 0.2 0.6 &amp;
+</pre>
+
+<p>As you move around in the image you should see that the mean FA image is
+indeed well aligned to standard space and corresponds to white matter in the
+MNI152 image. Remove these images (<em>Overlay -&gt; Remove all</em>),
+then open the aligned FA maps for all subjects and the mean FA
+skeleton (<em>File -&gt; Add from file</em>, and
+select <code>all_FA</code> and <code>mean_FA_skeleton</code>). Change the
+colour map for <code>mean_FA_skeleton</code> to <em>Green</em>, and the
+display range to <code>0.2 - 0.6</code>. </p>
+
+
+<p>Select <code>all_FA</code> and turn on the movie loop
+(<img src="movie_icon.png" class="icon">); you will see the mean FA skeleton
+on top of each different subject's aligned FA image. If all the processing so
+far has worked, the skeleton should look like the examples shown in the
+lecture. If the registration has worked well you should see that in general
+each subject's major tracts are reasonably well aligned to the relevant parts
+of the skeleton. </p>
+
+<p>What happens if we set the skeleton threshold
+lower than 0.2? To do this in FSLeyes, change the lower of the display
+range settings.</p>
+
+<p>
+  <span class="clickme" onclick="showIt('skelthresh')">
+    <sup><a id="en0">*</a></sup>Answer
+  </span>
+</p>
+
+
+<div class="answer" id="skelthresh" style="display: none;">
+  <p>
+    If you set the skeleton threshold (in FSLeyes, the lower of
+    the display range settings) much lower than 0.2, it will extend away towards
+    extremes where there is too much cross- subject variability and where the
+    nonlinear registration has not been able to give good alignments. In this
+    dataset, with very few subjects, the mean FA image is quite noisy, so you
+    probably want the threshold around 0.3.   </p>
+</div>
+
+
+
+<hr>
+<h3>5. Projecting all pre-aligned FA data onto the skeleton</h3>
+
+<p>The last TBSS script carries out the final steps necessary before you run
+the voxelwise cross-subject stats. It thresholds the mean FA skeleton image at
+the chosen threshold: </p>
+
+
+<p>If you're still in the <code>stats</code> directory:</p>
+
+
+<pre class="bash">cd ..</pre>
+
+
+<p>Then:</p>
+
+
+<pre class="bash">tbss_4_prestats 0.3</pre>
+
+
+<p>This takes 4-5 minutes to run; read the rest of this section while it's
+running (if you can't make much sense of it, don't worry - it's described in
+more detail in the paper!). </p>
+
+
+<p>The thresholding creates a binary skeleton mask that defines the set of
+voxels used in all subsequent processing. </p>
+
+
+<p>Next a "distance map" is created from the skeleton mask. This is
+used in the projection of each subject's FA onto the skeleton; when searching
+outwards from a skeleton voxel for the local tract centre, the search only
+continues while the distance map values keep increasing - this means that the
+search knows to stop when it has got more than halfway between the starting
+skeleton point and another separate part of the skeleton. </p>
+
+
+<p>Finally, the script takes the 4D pre-aligned FA images in
+<code>all_FA</code> and, for each "timepoint" (subject ID), projects
+the FA data onto the mean FA skeleton. This results in a 4D image file
+containing the (projected) skeletonised FA data. It is this file that you will
+feed into voxelwise statistics in the next section. </p>
+
+
+<p>Once the script has finished, <code>cd</code> into
+<code>stats</code> and have a look at <code>all_FA_skeletonised</code> in
+FSLeyes - turn on movie mode to see the different timepoints of the
+skeletonised data. </p>
+
+
+<hr>
+<h3>6. Voxelwise statistics on the skeletonised FA data</h3>
+
+
+<p>The previous step resulted in the 4D skeletonised FA image. It is this that
+you now feed into voxelwise statistics, that, for example, tells you which FA
+skeleton voxels are significantly different between two groups of subjects. </p>
+
+
+<p>The recommended way of doing the stats is to use the <code>randomise</code>
+tool. For more detail see
+the <a href="fsl/fslwiki/Randomise.html" target="_blank">Randomise
+manual</a>. Before running <code>randomise</code> you will need to generate
+design matrix and contrast files (e.g., <code>design.mat</code>
+and <code>design.con</code>).  We will use the <b>Glm</b> GUI to generate
+these. Note that the order of the entries (rows) in your design matrix
+<em>must</em> match the alphabetical order of your original FA images, as that
+determines the order of the aligned FA images in the final 4D
+file <code>all_FA_skeletonised</code>. In this case the order was: 3 young
+subjects and then 3 older subjects. Start the GUI: </p>
+
+
+<pre class="bash">cd stats
+Glm
+</pre>
+
+
+<p>Change <b>Timeseries design</b> to <em>Higher-level / non-timeseries
+design</em>.  Change the <b># inputs</b> to 6 (you may have to press the enter
+key after typing in <code>6</code>) and then use the <b>Wizard</b> to setup
+the <em>Two-groups, unpaired</em> t-test with 3 as the <em>Number of subjects
+in first group</em> (Note that the order of the subjects will be important in
+this design). Reduce the number of contrasts to 2 (we're not interested in the
+group means on their own). Finally, save the design as
+filename <code>design</code>, and in the terminal use <code>less</code> to
+look at the <code>design.mat</code> and <code>design.con</code> files.</p>
+
+
+<p> You are now ready to run the stats. Because this reduced dataset only
+contains 6 subjects, only 20 distinct permutations are possible, so by default
+randomise will run just these 20. Again, because this tiny dataset has so few
+subjects the raw t-stat values will not be very significant - so let's try
+setting a cluster-forming t threshold of 1.5 (in "real" datasets we
+would normally recommend using the --T2 option for TFCE instead of
+cluster-based thresholding):</p>
+
+
+<pre class="bash">randomise -i all_FA_skeletonised -o tbss \
+  -m mean_FA_skeleton_mask -d design.mat -t design.con -c 1.5
+</pre>
+
+
+<p>Contrast 1 gives the young&gt;older test. The raw unthresholded tstat image
+is <code>tbss_tstat1</code> and the corresponding (p-values corrected for
+multiple comparisons) cluster image
+is <code>tbss_clustere_corrp_tstat1</code>. </p>
+
+
+<p>Thresholding clusters at 0.95 (corresponding to thresholding the p-values
+at 0.05, because randomise outputs p-values as 1-p for convenience of display
+- so that higher values are more significant) shows a few areas of reduced FA
+in the older subjects. The following shows unthresholded t-stats in red-yellow
+and thresholded clusters in blue: </p>
+
+<pre class="bash">fsleyes -std1mm mean_FA_skeleton -cm green -dr .3 .7 \
+  tbss_tstat1 -cm red-yellow -dr 1.5 3 \
+  tbss_clustere_corrp_tstat1 -cm blue-lightblue -dr 0.949 1 &amp;
+</pre>
+
+
+<p>Look at the histogram of <code>tstat1</code>; it is clearly shifted to the
+right, suggesting a global decrease in FA with aging (you may need to change
+the number of histogram bins to see this easily). </p>
+
+
+<p>
+  <span class="clickme" onclick="showIt('spc')">
+    <sup><a id="en0">*</a></sup>Displaying "fattened" results
+  </span>
+</p>
+
+
+<div class="answer" id="spc" style="display: none;">
+  <p>
+    <p>If you prefer to display "fattened" results (that are not just
+    the one-voxel-thick skeleton, but "fill out" into the tracts as seen
+    in mean FA image), whilst still masking with the mean FA image, there is a
+      simple script which will do this for you, then run:</p>
+
+    <pre class="bash">tbss_fill tbss_clustere_corrp_tstat1 0.95 \
+      mean_FA tbss_clustere_corrp_tstat1_filled
+    </pre>
+
+    <p>and then load this output into FSLeyes and choose an appropriate
+    colourmap. This script smooths the thresholded input image (by a typical tract
+    width according to the local tract structure), multiples by the mean FA image
+    (in order to constrain the width) and then adds the original input back in so
+    that the skeleton can still be seen within the thickened output. </p>
+
+    <p>
+    You can get a similar effect to the output of the <code>tbss_fill</code> from
+    within FSLeyes, by setting the <b>Interpolation</b> option to <em>Spline
+    interpolation</em>, in the display settings panel (<img src="gear_icon.png" class="icon">). You may need to open the display panel and lower the low clipping
+    range value so that smoothed areas do not get clipped.
+  </p>
+</div>
+
+<hr>
+<p class="centred">The End.</p>
+</div>
+
+
+</body></html>
