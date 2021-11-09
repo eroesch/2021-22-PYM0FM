@@ -9,3 +9,7 @@
 * [https://eroesch.github.io/2021-22-PYM0FM/feat2/index.html](https://eroesch.github.io/2021-22-PYM0FM/feat2/index.html)
 * [https://eroesch.github.io/2021-22-PYM0FM/feat3/index.html](https://eroesch.github.io/2021-22-PYM0FM/feat3/index.html)
 * [https://eroesch.github.io/2021-22-PYM0FM/feat_extras/index.html](https://eroesch.github.io/2021-22-PYM0FM/feat_extras/index.html)
+* [https://eroesch.github.io/2021-22-PYM0FM/fdt1/index.html](https://eroesch.github.io/2021-22-PYM0FM/fdt1/index.html)
+* [https://eroesch.github.io/2021-22-PYM0FM/fdt2/index.html](https://eroesch.github.io/2021-22-PYM0FM/fdt2/index.html)
+* [https://eroesch.github.io/2021-22-PYM0FM/fslnets/index.html](https://eroesch.github.io/2021-22-PYM0FM/fslnets/index.html)
+* [https://eroesch.github.io/2021-22-PYM0FM/ica/index.html](https://eroesch.github.io/2021-22-PYM0FM/ica/index.html)
