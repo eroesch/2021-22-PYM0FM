@@ -39,6 +39,14 @@ window.onload=function() {
 
 <h1 class="centred">Registration Practical</h1>
 
+<p>This is the version of the FSL practical adjusted for use in PYM0FM, to be used on the CINN Nutanix Platform. Consequently, there are a few things you need to keep in mind:
+<ul>
+     <li>The data is not stored in your home folder (~/fsl_course_data), and instead it is stored in the shared pym0fm drive, located at <code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data</code>.</li>
+     <li>We are using virtual machines that are preconfigured for neuroimaging work. Our researchers typically use both FSL verion 5 and 6, and to avoid conflict we are containing version of the software in modules. When you start a new terminal session, whether you start a new analysis, or you just closed one terminal, you will have to type <code>module load fsl6.0</code>, each time.</li>
+</ul>
+</p>
+<p><center>---</center></p>
+
 <p>In this practical you will explore each of the registration steps within a
 standard two-step registration for functional images. We will first learn to
 use the registration tools within the FEAT GUI. Then we will see how to apply
