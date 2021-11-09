@@ -1,0 +1,2133 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+
+<!-- Start of Practical boilerplate. -->
+<link rel="stylesheet" type="text/css" href="../fsl/fsl.css" />
+<link rel="stylesheet" type="text/css" href="../fsl/quiz.css">
+<link rel="stylesheet" type="text/css" href="../fsl/viz.css">
+
+<script type="text/javascript" src="../fsl/quiz.js"></script>
+<script type="text/javascript" src="../fsl/showhide.js"></script>
+<script type="text/javascript" src="../fsl/viz.js"></script>
+<script type="text/javascript">
+window.onload=function() {
+    setupQuizQuestions();
+    var graphs = document.querySelectorAll(".viz-graph");
+    var parser = new DOMParser;
+    for (var i = 0; i < graphs.length; i++){
+        var div = graphs[i];
+        var dom = parser.parseFromString(div.innerHTML, "text/html");
+        div.innerHTML = Viz(dom.body.textContent);
+        var svg = div.querySelector("svg");
+        svg.setAttribute("width",  "100%");
+    }
+}
+</script>
+<!-- End of Practical boilerplate. -->
+
+<title>Structural Analysis Practical</title>
+</head>
+
+<body>
+<div id="practical">
+
+
+<h1 class="centred">Structural Analysis Practical</h1>
+
+
+<p>In this practical you will learn to use the main tools for structural
+analysis: FAST (tissue-type segmentation), FIRST (sub-cortical structure
+segmentation) and FSL-VBM (local grey matter volume difference analysis).  In
+addition there are several optional extensions, including BIANCA and SIENA, that will be
+relevant to those with interests in particular types of structural
+analysis. We advise people to pick and choose based on their own particular
+interests; everyone should do FAST, but after that the parts are quite
+separate and can be done in any order (e.g. people particularly interested in
+VBM might want to do that before the section on FIRST).
+</p>
+
+
+<h2>Contents:</h2>
+
+<dl class="contents">
+
+<dt><a href="#fast">FAST</a></dt>
+<dd>Perform tissue-type segmentation and bias-field correction using FAST.</dd>
+
+<dt><a href="#first">FIRST</a></dt>
+<dd>Use FIRST for segmentation of sub-cortical structures. Introduces basic
+  segmentation and vertex analysis for detecting group differences.</dd>
+
+<dt><a href="#vbm">FSL-VBM</a></dt>
+<dd>Perform an FSL-VBM (voxel-based morphometry) analysis for detecting differences
+  in local grey matter volume.</dd>
+
+</dl>
+
+
+<h2> Optional extensions:</h2>
+
+<dl class="contents">
+
+<dt><a href="#bianca">BIANCA</a></dt>
+<dd>Use BIANCA to detect white matter lesions.</dd>
+
+<dt><a href="#siena">SIENA</a></dt>
+<dd>Use SIENA for detecting global grey-matter atrophy in longitudinal
+scans.</dd>
+
+<dt><a href="#sienax">SIENAX</a></dt>
+<dd>An introduction to the cross-sectional version of SIENA.</dd>
+
+<dt><a href="#firstopt">FIRST Revisited</a></dt>
+<dd>Looking at the "uncorrected" FIRST outputs.</dd>
+
+<dt><a href="#mfast">Multi-Channel FAST</a></dt>
+<dd>An introduction to the multi-channel version of FAST - for use with multiple
+acquisitions (e.g. T1-wt, T2-wt, PD, ...).</dd>
+
+</dl>
+
+
+<hr/>
+<h2><a name="fast">FAST</a></h2>
+
+
+<p>
+In this section we will segment single T1-weighted images with FAST and look at how
+to quantify the grey matter volume and amount of bias field present.
+</p>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/fast
+</pre>
+
+
+<h3>FAST Input Preparation - BET </h3>
+
+
+<p>To begin with we will prepare data for FAST; this requires running BET for
+brain extraction.  In addition, just for this practical, we will also extract
+a small ROI containing a few central slices so that FAST only takes a minute
+to process the data, instead of 10-15 minutes for a full brain.
+</p>
+
+
+<p>Run BET on the input image <code>structural</code> to create
+<code>structural_brain</code> (type <code class="bash">Bet</code> for the GUI
+[<code>Bet_gui</code> on a Mac], or <code class="bash">bet</code> for the command-line
+program).</p>
+
+
+<h3>Look at your data</h3>
+
+
+<p>View the output to check that BET has worked OK (e.g. change the colourmap
+for <code>structural_brain</code> to say Red-Yellow):</p>
+
+<pre class="bash">
+fsleyes structural structural_brain &amp;
+</pre>
+
+
+<p>Back in the terminal, create a cut-down version (containing a few central
+slices) of the brain-extracted image using the region-of-interest program
+<code>fslroi</code>. This will let you try out some of the FAST options
+without having to wait more than a minute each time.</p>
+
+
+<pre class="bash">
+fslroi structural_brain structural_brain_roi 0 175 0 185 100 5
+</pre>
+
+
+<p>Load <code>structural_brain_roi</code> into FSLeyes to see the cut-down
+image. See how few slices are left. Leave FSLeyes open for the moment.</p>
+
+
+<h3>Image with Bias Field</h3>
+
+
+<p>You will also find an image in this directory called
+<code>structural_brain_7T.nii.gz</code> which contains a section of the same
+brain acquired on a 7 Tesla scanner with a different bias field or
+inhomogeneity, and a cut-down version
+<code>structural_brain_7T_roi.nii.gz</code>.</p>
+
+
+<p>Add <code>structural_brain_7T_roi.nii.gz</code> to the already open FSLeyes
+(or open a new one and load <code>structural_brain_roi</code> first) and then
+look at the difference between these images. Note how both grey matter and
+white matter are darker in the left anterior portion of the 7T image.</p>
+
+
+<hr />
+<h3> FAST - Single Channel Example </h3>
+
+
+<p>Run FAST (separately) on both <code>structural_brain_roi</code> and
+<code>structural_brain_7T_roi</code>. Use the GUI (<code class="bash">Fast</code>
+[or <code>Fast_gui</code> on a Mac]) and turn on the <b>Estimated bias field</b>
+button (which saves a copy of the bias field) and <b>Restored input</b> button
+(which corrects the original image with the calculated bias field). For both
+images also open the <b>Advanced Options</b> tab and change the <b>Number of
+iterations for bias field removal</b> to 10 to account for the strong bias fields
+in both cases.</p>
+
+
+<p>Finally, don't forget to check that the output name is different for the
+two runs (<code>structural_brain_roi</code>
+and <code>structural_brain_7T_roi</code>)!  Once this is set up
+press <b>Go</b> for both - they should only take a minute to run.</p>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="structural, T1 image"];
+  2 [label="Fast"];
+  3 [label="Bias field estimation"];
+  4 [label="Tissue segmentation"];
+  5 [label="Partial volume estimates"];
+
+  1 -> 2;
+  2 -> 3;
+  2 -> 4;
+  2 -> 5;
+}
+</div>
+
+
+<h3>Bias Field Correction</h3>
+
+
+<p>Now let's look at the bias field outputs -
+<code>structural_brain_roi_bias</code> and
+<code>structural_brain_7T_roi_bias</code> (these are FAST's estimates of the
+bias fields). View these in FSLeyes and set the display ranges to be equal for
+both images (e.g. 0.6 to 1.4). Notice how different the two bias fields
+are.</p>
+
+<div class="quiz_question">
+
+  <span class="question">Why do you think there might be a worse bias field
+  when acquiring images on different scanners, such as that seen in the brain
+  scan from the 7 Tesla scanner?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio"
+    name="answer"/><label>Scanners with higher B0 fields have less homogeneous
+    B1 fields, causing a larger bias.</label>
+    <span id="option1" class="answer correct">Correct! This is actually
+    because the wavelength of the RF (B1) fields get smaller at higher B0
+    fields and so the bias field is less smooth and thus has greater
+    inhomogeneities.</span><br/>
+
+    <input id="option2" class="option" type="radio"
+    name="answer"/><label>Subjects tend to feel more claustrophobic in 7T
+    scanners (due to the long bore) and hence move around more and make the
+    bias field worse.</label>
+    <span id="option2" class="answer incorrect">Incorrect. Movement artifacts
+    can interact with the bias field, but the bias field itself is not stronger due
+    to movement.</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>It
+    is more difficult to design gradient coils for 7T scanners and one of the
+    compromises that has to be made for better SNR is to have larger gradient
+    inhomogeneities.</label>
+    <span id="option3" class="answer incorrect">Incorrect. Bias field is due
+    to RF (B1) fields, not the gradient fields.</span><br/>
+  </form>
+</div>
+
+
+<p>Open both of the <code>*_seg.nii.gz</code> output segmentations in
+FSLeyes. Try using different colour maps for the segmentations when viewing
+the results. You can now see how a different bias field can alter the
+segmentation of the image.
+
+
+
+<h3>Partial Volume Segmentation</h3>
+
+
+<p>Now let's look at the partial volume segmentations.  View the
+different outputs in FSLeyes by first loading
+<code>structural_brain_roi_restore</code>, then loading the PVE (Partial
+Volume Estimate) images as overlays, adjusting the overlay opacity as
+necessary. Note that you can tell FSLeyes what colourmaps and intensity ranges
+to use from the command line:</p>
+
+
+<pre class="bash">
+fsleyes structural_brain_roi_restore \
+  structural_brain_roi_pve_0 -cm green -dr 0.5 1 \
+  structural_brain_roi_pve_1 -cm blue-lightblue -dr 0.5 1 \
+  structural_brain_roi_pve_2 -cm red-yellow -dr 0.5 1 &amp;
+</pre>
+
+
+<p>Identify which PVE component is the grey matter. Choose a voxel on the
+border of the grey matter and look at the values contained in the three PVE
+components. The values represent the volume fractions for the 3 classes (GM,
+WM, CSF) and should add up to one. Now pick a point in the middle of the grey
+matter and look at the three values here.</p>
+
+
+<p>The PVE images are the most sensitive way to calculate the tissue volume
+which is present.  For example, we can find the total GM volume
+with <code>fslstats</code> by doing:</p>
+
+
+<pre class="bash">
+fslstats structural_brain_roi_pve_1 -M -V
+</pre>
+
+
+<p>The first number reported by <code>fslstats</code> gives the mean voxel GM
+PVE across the whole image, the second is the number of voxels and the third number gives the total volume of the image (in mm<sup>3</sup>) ignoring all voxels which are zero. Multiplying the first and third numbers together will give the total GM volume in mm<sup>3</sup> (for more details on fslstats just
+type <code>fslstats</code> to see its usage description).</p>
+
+
+<hr/>
+<h2><a name="first">FIRST</a></h2>
+
+
+<p>In this section we lead you through examples of subcortical structure
+  segmentation with FIRST, and some post-fitting statistical analyses. </p>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/first/
+</pre>
+
+
+<h3>Segmentation of structures</h3>
+
+
+<p>We begin by segmenting the left hippocampus and amygdala from a single
+T1-weighted image. The image is <code>con0047_brain.nii.gz</code>. Load this into FSLeyes to start with to see the image. <span class="note">Note that although this is not normally
+done, this image has had brain extraction run on it. This is due to the anonymisation done to the original image. </span></p>
+
+
+<p>To perform the segmentation of the left hippocampus and amygdala we simply
+  need to run one command:</p>
+
+
+<pre class="bash">
+run_first_all -i con0047_brain -b -s L_Hipp,L_Amyg \
+  -o con0047 -a con0047_brain_to_std_sub.mat
+</pre>
+
+
+<p>This command will run several steps for you and has several options.  It
+will take about 4-5 minutes to run, so while it is running read through the
+following description.</p>
+
+
+<h3>Options used in <code>run_first_all</code></h3>
+
+
+<dl class="horiz">
+
+  <dt><code>-i</code></dt><dd> specifies the input image (T1-weighted)</dd>
+
+  <dt><code>-o</code></dt><dd> specifies the output image basename (extensions
+  will be added to this)</dd>
+
+  <dt><code>-b</code></dt><dd> specifies that the input image has been brain
+  extracted</dd>
+
+  <dt><code>-s</code></dt><dd> specifies a restricted set of structures to be
+  segmented (just two in this case)</dd>
+
+  <dt><code>-a</code></dt><dd> specifies the affine registration matrix to
+  standard space (optional)</dd>
+</dl>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="structural, T1 image"];
+  2 [label="First"];
+  3 [label="Structural image registered to standard space"];
+  4 [label="3D subcortical structure segmentation
+(no overlap)"];
+  5 [label="4D subcortical structure segmentation
+(before boundary correction)"];
+  6 [label="3D mesh representation of final segmentation
+(*_first.vtk)"];
+  7 [label="Mode/shape parameters
+(*_first.bvars)"];
+
+  1 -> 2;
+  2 -> 3;
+  2 -> 4;
+  2 -> 5;
+  2 -> 6;
+  2 -> 7;
+}
+</div>
+
+
+<p>The <code>run_first_all</code> script uses the best set of parameters
+(number of modes, intensity reference) to run for each structure, as
+determined by empirical experiments.  Therefore it is not necessary to specify
+these values when running the method.</p>
+
+
+<p>Normally the affine registration would be run as part of this script (just
+leave off the <code>-a</code> option and it will be done automatically), but
+it has been pre-supplied here in order to save time - as the registration
+takes about 6 minutes.</p>
+
+<p> We will now go through how this script works and what to look for in the
+output. </p>
+
+
+<h3>Check the registration</h3>
+
+
+<p>Load the image <code>con0047_brain_to_std_sub.nii.gz</code> together with the
+<em>1mm</em> standard space template image into FSLeyes. Look at the alignment
+of the subcortical structures.  It should be quite close but we do not expect
+it to be perfect. </p>
+
+
+<p> This registration is normally created by <code>run_first_all</code> as the
+initial stage, but has been included here from a previous run to save time.
+The registration should always be performed using the tools in FIRST since it
+does a special registration, optimised for the sub-cortical structures.  It
+begins with a typical 12 DOF affine registration using FLIRT, but then refines
+this in a second stage with a sub-cortical weighting image that concentrates
+purely on the sub-cortical parts of the image.  Thus the final registration
+may not be as good in the cortex but will better fit the sub-cortical
+structures.  However, this registration only removes the global affine
+component of the differences in the structures and hence will not be that
+precise.  In addition it, crucially, leaves the relative orientation
+(pose) <em>between</em> the structures untouched.</p>
+
+
+<p>Always make sure you check that the registration has worked before looking
+at other outputs. </p>
+
+
+<p>We will now move onto looking at the other outputs which should have been
+generated by <code>run_first_all</code> at this point.  If the
+<code>run_first_all</code> command has not finished have a quick look at
+the <a href="fsl/fslwiki/FIRST.html"
+target="_blank">FIRST documentation page</a>.
+</p>
+
+
+<p>Before doing anything else we will check the output logs to see if any
+  errors have occured.  Do this with the command:</p>
+
+
+<pre class="bash">
+cat con0047.logs/*.e*
+</pre>
+
+
+<p>If everything worked well you will see no output from this, otherwise it
+will show the errors.  If any errors are shown, ask a tutor about them.  You
+should always check the error files in the log directories for FIRST and other
+FSL commands that create log directories like this (e.g. TBSS, FSL-VBM,
+BEDPOSTX, etc.). </p>
+
+
+<h3>Boundary corrected segmentation output</h3>
+
+
+<p>In FSLeyes, open the image <code>con0047_brain</code> and add the
+  image <code>con0047_all_fast_firstseg</code> on top. </p>
+
+
+<p> This <code>*_firstseg</code> image shows the combined segmentation of all
+structures based on the surface meshes that FIRST has fit to the image.  It is
+in the native space of the structural image (not in the standard space,
+although the registration before was required to move the model from the
+standard space back into this image's native space). </p>
+
+
+<p>As converting the underlying FIRST meshes to a voxel-based image can create
+overlap at the boundaries, these boundary voxels have been
+&quot;corrected&quot; or re-classified by <code>run_first_all</code> using the
+default method (here it is FAST - which classifies the boundary voxels
+according to intensity).  Now look at the uncorrected segmentations with the
+  following: </p>
+
+
+<pre class="bash">
+fsleyes con0047_brain con0047_all_fast_origsegs.nii.gz \
+  -cm Red-Yellow -dr 0 118 &amp;
+</pre>
+
+
+<p>Each structure is labeled with a different intensity value inside and 100 +
+this value for the boundary voxels (the <code>con0047_all_fast_origsegs</code> image is a
+4D image with each structure in a different volume).  The intensity values
+assigned to the interior of each structure is given by
+the <a href="fsl/fslwiki/FIRST/UserGuide.html#Labels">CMA
+labels</a>.</p>
+
+
+<p> Have a look at these images to see how good the segmentation is.  Play
+with the opacity settings (or turn the segmentation on and off)
+to get a feeling for the quality. </p>
+
+
+<p>The corrected image (<code>*_firstseg</code>) is normally the one that you
+would use to define an ROI or mask for a particular subcortical structure. For
+more details on the uncorrected image (<code>*_origsegs</code>) -- see
+the <a href="#firstopt">optional practical</a> at the end.</p>
+
+
+<h3>Vertex Analysis using first_utils</h3>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/first/shapeAnalysis
+</pre>
+
+
+<p>Vertex analysis (or shape analysis) looks at how a structure may differ in
+shape between two groups (e.g., patients and controls). It looks at the
+differences directly in the meshes, on a vertex by vertex basis. This is
+different from using a whole-structure summary measure like volume, as it
+allows us to visualise the region of the shape that differs as well as the
+type of shape difference.</p>
+
+
+<p><code>first_utils</code> tests the differences in vertex location - here we
+will look at the difference in the mean vertex location between two groups of
+subjects, but it can also look for correlations. It projects the vertex
+locations onto the normal vectors of the average surface, so that it is
+sensitive to changes in the boundary location.</p>
+
+
+<p>Here we will use an example dataset consisting of 8 subjects (5 controls
+and 3 Alzheimer's patients) which we will do an analysis on. As the numbers
+are low it will have fairly low statistical power, but in this case it still
+shows a clear effect. A full analysis, on a larger set of subjects, would
+proceed in exactly the same way.</p>
+
+
+<p>List the files in this directory - we have already run FIRST on each
+subject in order to get a segmentation of the left hippocampus. So you will
+see files such as: </p>
+
+
+<pre class="listing">
+con0047_brain.nii.gz
+con0047_brain_to_std_sub.mat
+con0047_brain_to_std_sub.nii.gz
+con0047.com
+con0047-L_Hipp_corr.nii.gz
+con0047-L_Hipp_first.bvars
+con0047-L_Hipp_first.nii.gz
+con0047-L_Hipp_first.vtk
+con0047.logs
+</pre>
+
+
+<p>Most of them should be familiar from the previous example. Because only a
+single structure was run, the uncorrected segmentation is saved
+as <code>con0047-L_Hipp_first</code> and the boundary corrected segmentation
+is saved as <code>con0047-L_Hipp_corr</code> (rather than the names used
+before in the case of multiple structures). However, for vertex analysis we
+will be using the <code>.bvars</code> files as they contain the information
+  about the sub-voxel mesh coordinates. </p>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="Each subject's .bvars file"];
+  2 [label="concat_bvars"];
+  3 [label="Combined 4D .bvars file"];
+  4 [label="Design matrix
+(design.mat)"];
+  5 [label="first_utils"];
+  6 [label="4D output image of all subject meshes"];
+
+  1 -> 2;
+  2 -> 3;
+  3 -> 5;
+  4 -> 5;
+  5 -> 6;
+}
+</div>
+
+
+<h3>Running vertex analysis</h3>
+
+
+<p>In general, to run shape analysis, you need to do the following:</p>
+
+
+<ol>
+<li>To begin with, run FIRST on all subjects (this has already been done for
+    you to save time). If you were running this yourself you would do it in
+    the same way that we did in the previous section, specifying what
+    structure(s) you are interested in (to do all 17 structures just leave out
+    the <code>-s</code> option). We then use the <code>.bvars</code> files
+    for the vertex analysis.
+</li>
+
+
+<li><p>Check that the segmentations worked. In order to visualise the
+    segmentation outputs of FIRST on a large number of subjects it is useful
+    to generate summary reports that can be assessed efficiently. This can be
+    easily done using <code>first_roi_slicesdir</code>, which shows an ROI
+    (with 10 voxel padding) around the structure of interest for each subject,
+    summarised into a single webpage.  In this case run:</p>
+
+<pre class="bash">
+first_roi_slicesdir *brain.nii.gz *L_Hipp_first.nii.gz
+</pre>
+
+
+    <p>and then view the output <code>index.html</code> in a web browser (it will
+    be created in a subdirectory called <code>slicesdir/</code>).  Check that
+    none of the segmentations have failed; make sure that you look at the
+    axial, coronal and sagittal slices.</p>
+</li>
+
+
+<li><p>Combine all the mode parameters (<code>.bvars</code> file) into a
+    single file. Each structure (model) that is fit with FIRST will generate a
+    separate <code>.bvars</code> file. For a given structure
+    (e.g. hippocampus) combine all the relevant <code>.bvars</code> files
+    using the <code>concat_bvars</code> script. Note that the order here is
+    very important, as it must correspond to the order specified in the design
+    matrix to be used later for statistical testing.  For this example,
+    combine the <code>.bvars</code> files (all of the left hippocampi) using
+    the command:</p>
+
+
+<pre class="bash">
+concat_bvars all.bvars *L_Hipp*.bvars
+</pre>
+
+<div class="aside">
+This command should be run in the directory containing the bvars files, not 
+the slicesdir subdirectory created in the previous step.
+</div>
+
+    <p>which (due to alphabetical ordering) puts the 5 control subjects first,
+    followed by the 3 subjects with the disease.</p>
+</li>
+
+<li><p>Create a design matrix (Don't worry if you don't fully understand this part, we
+    will cover this in more detail later in the course).The subject order should match 
+    the order in which the <code>.bvars</code> were combined in
+    the <code>concat_bvars</code> call. The design matrix is most easily
+    created using FSL's <b>Glm</b> tool (a single column file). To do
+    this, start the <code class="bash">Glm</code> GUI (<code>Glm_gui</code> on
+    mac). First, choose the <b>Higher-level/non-timeseries design</b> option from the top pull
+    down menu in the small window. Next, set the <b># inputs</b> option to be 8 (the
+number of subjects we have in this example).</p>
+
+    <p>In the bigger window (of the Glm GUI) set the values of the EV (the
+    numbers in the <em>second column</em>) to be -1 for the first five entries
+    (our five controls) and +1 for the next three entries (our three
+    patients). This will allow us probe the difference between groups. Leave 
+    the 'group' column as all ones. Once you've done this, go to the <b>Contrasts and F-tests</b> 
+    tab. Rename the t-contrast (C1) to 'group difference', but leave the value 
+    set for EV1 as 1. We also need to add an F-test. Change the number in
+    the <b>F-tests</b> box to 1, and then highlight the button on the right
+    hand side (under <b>F1</b>) to select an F-test that operates on the
+    single t-contrast.This F-test will be the main contrast of interest for
+    our vertex analysis as it allows us to test for differences in either
+    direction.</p>
+
+    <p>When this is all set up correctly, save everything using
+    the <b>Save</b> button in the smaller Glm window. Choose the current
+    directory and use the name <code>design_con1_dis2</code> (as we will
+    assume this is the name used below, although for your own studies you can
+    use any name of your choice). Now exit the Glm GUI.</p>
+</li>
+</ol>
+
+
+<p>We are now ready to run <code>first_utils</code> and perform the vertex
+analysis. </p>
+
+
+<p>We will do the analysis using <code>--useReconMNI</code> to reconstruct the
+surfaces in MNI152 space (though note that an alternative would be to
+reconstruct the surfaces in the native space
+using <code>--useReconNative</code>). </p>
+
+
+<p>Perform the first part of vertex analysis using the command:</p>
+
+
+<pre class="bash">
+first_utils --usebvars --vertexAnalysis -i all.bvars \
+  -o diff_con1_dis2_L_Hipp_mni -d design_con1_dis2.mat --useReconMNI
+</pre>
+
+
+<div class="aside">
+If you are running the <code>first_utils</code> command on a personal install
+of FSL, it may fail unless FSL is installed at <code>/usr/local/fsl</code>.
+</div>
+
+
+<p>This <code>first_utils</code> command uses the combined bvars input,
+created above with <code>concat_bvars</code>, and the design
+matrix <code>design_con1_dis2.mat</code>.  The other options specify that this
+command is to prepare an output for vertex analysis (since it can also do
+other things) in standard space (<code>--useReconMNI</code>). </p>
+
+
+<p>Once <code>first_utils</code> has run you are now ready to carry out the
+cross-subject statistics. We will use <code>randomise</code> for this, as the
+FIRST segmentations are unlikely to have nice, indepedent Gaussian errors in
+them. Normally it is recommended to run at least 5000 permutations (to end up
+with accurate p-values), but with a small set of subjects like this there is a
+limit to how many unique permutations are available, so in this analysis all unique permutations will be run. </p>
+
+
+<p>For multiple-comparison correction there are several options available
+in randomise and we will use the cluster-based one here (<code>-F</code>),
+although other options may be better alternatives in many cases.  The call to
+randomise (using the outputs from <code>first_utils</code>, which includes
+a mask defining the boundary of the appropriate structure, as well as
+the design matrix and contrasts formed above) is: </p>
+
+
+<pre class="bash">
+randomise -i diff_con1_dis2_L_Hipp_mni.nii.gz \
+  -m diff_con1_dis2_L_Hipp_mni_mask.nii.gz \
+  -o con1_dis2_L_Hipp_rand -d design_con1_dis2.mat \
+  -t design_con1_dis2.con -f design_con1_dis2.fts \
+  --fonly -D -F 3
+</pre>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="4D output image of all subject meshes
+(diff_con1_dis2_L_Hipp_mni.nii.gz)"];
+  2 [label="Mask of ROI
+(boundary of structure; diff_con1_dis2_L_Hipp_mni_mask.nii.gz)"];
+  3 [label="Design matrix
+(design_con1_dis2.mat)"];
+  4 [label="Design t-test contrasts
+(design_con1_dis2.con)"];
+  5 [label="Design f-test contrasts
+(design_con1_dis2.fts)"];
+  6 [label="Statistical options
+(--fonly -D -F 3)"];
+  7 [label="randomise"];
+  8 [label="Statistics of interest
+(basename of con1_dis2_L_Hipp_rand)"];
+
+  1 -> 7;
+  2 -> 7;
+  3 -> 7;
+  4 -> 7;
+  5 -> 7;
+  6 -> 7;
+  7 -> 8;
+}
+</div>
+
+
+<h4>Viewing vertex analysis output</h4>
+
+
+<p>The most useful output of <code>randomise</code> is a corrected p-value
+image, where the values are stored as 1-p (so that the interesting, small
+p-values appear &quot;bright&quot;).  The corrected p-value file is the one
+containing <code>corrp</code> in the name.  This correction is the
+multiple-comparison correction, and it is only this output which is
+statistically valid for imaging data - uncorrected p-values should not be
+reported in general, although they can be useful to look at to get a feeling
+for what is in your data.  The statistically significant results are therefore
+the ones with values greater than 0.95 (p<0.05), and in this case the file is
+called: <code>con1_dis2_L_Hipp_rand_clustere_corrp_fstat1</code>.</p>
+
+
+<p>To view the data in FSLeyes, on top of the standard brain, do the
+following:</p>
+
+
+<pre class="bash">
+fsleyes -std1mm \
+  con1_dis2_L_Hipp_rand_clustere_corrp_fstat1 -cm red-yellow -dr 0.95 1 &amp;
+</pre>
+
+
+<p>Note that this specifies the display range (0.95 to 1.0) and a useful
+colourmap (Red-Yellow) in order to easily see the results. </p>
+
+<p>Find the hippocampus in this image and look to see where the significant
+differences in shape have been found using this vertex analysis. Normally we
+would not expect to find much in a group of 8 subjects, but these were quite
+  severe AD cases and so the differences are very marked.</p>
+
+
+<!--div class="quiz_question">
+
+  <span class="question">We have used an F-test in this analysis. What do the
+  results tell us about the difference between the AD subjects and the
+  controls in the hippocampus?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>That
+      the AD subjects have a smaller hippocampus than the controls.</label>
+    <span id="option1" class="answer incorrect">Incorrect. An F-test can only
+    tell us that there is a difference between the two groups, but it does not
+    specify directionality. You would need to run a one-tailed T-test to find
+    out which direction the change is in.</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>That
+    there is a difference between the AD patients and controls, but not the
+    direction.</label>
+    <span id="option2" class="answer correct">Correct! The F-test considers
+    both directions and can only tell you if there is an effect. You would
+    need to run a one-tailed T-test to find out which direction the change is
+    in.</span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>That
+    the AD subjects have a larger hippocampus than the controls.</label>
+    <span id="option3" class="answer incorrect">Incorrect. An F-test can only
+    tell us that there is a difference between the two groups, but it does not
+    specify directionality. You would need to run a one-tailed T-test to find
+    out which direction the change is in.</span><br/>
+  </form>
+</div-->
+
+
+<h3>Some notes for running vertex analysis in practice</h3>
+
+
+<ul>
+<li>To run vertex analysis, you will need the <code>.bvars</code> files output
+    by FIRST and a design matrix. These contain all the information required
+    by <code>first_utils</code>.</li>
+
+<li>It sometimes may be desirable to reconstruct the surfaces in native space
+    (i.e.  without the affine normalization to MNI152 space). To do this,
+    instead of <code>--useReconMNI</code>, use the
+    <code>--useReconNative</code> and <code>--useRigidAlign</code>
+    options.</li>
+
+<li>When using the <code>--useRigidAlign</code> flag, <code>first_utils</code>
+    will align each surface to the mean shape (from the model used by FIRST)
+    with 6 degrees of freedom (translation and rotation). The transformation
+    is calculated such that the sum-of-squared distances between the
+    corresponding vertices is minimized. This command is needed when using
+    <code>--useReconNative</code>, however, can be used with
+    <code>--useReconMNI</code> to remove local rigid body differences.</li>
+
+<li>The <code>--useScale</code> flag can be used in combination with
+    <code>--useRigidAlign</code> to align the surfaces using 7 degrees of
+    freedom. <code>--useScale</code> will indicate to <code>first_utils</code>
+    to remove global scaling.</li>
+
+<li>More details and guidelines for your analysis are contained in the
+    <a href="fsl/fslwiki/FIRST.html"
+target="_blank">FIRST documentation
+    page</a>.</li>
+</ul>
+
+
+<hr/>
+<h2><a name="vbm">FSL-VBM</a></h2>
+
+
+<p>In this section we look at a small study comparing patients and controls
+for local differences in grey matter volume, using FSL-VBM. Most of the steps
+have already been carried out, as there isn't enough time in this practical to
+run all of the registrations required to carry out a full analysis from
+scratch. </p>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/vbm
+</pre>
+
+
+<p>Do an <code class="bash">ls</code> in the directory. Note that we have
+renamed the image files with some prefixes so that all controls and patients
+would be organised in &quot;blocks&quot;. This is to make the statistical
+design easily match the alphabetical order of the image files (who will be
+later concatenated to be statistically analysed). </p>
+
+
+<p>We have 10 controls and 8 patients and wish to carry out a
+control&gt;patient comparison. First, we need to define the statistical
+design, which here will be a simple two-tailed t-test to compare both
+groups. For this, use the <code class="bash">Glm</code> GUI to generate
+simple <code>design.mat</code> and <code>design.con</code> files, using the
+<b>Higher-level/non-timeseries design</b> option in the GLM setup window.</p>
+
+
+<p>At this point, you need to enter the appropriate overall number of subjects as
+inputs in the GLM setup window (here n=18, then press enter), and then use the
+<b>Wizard</b> button of the GLM setup window with the <b>two groups, unpaired
+option</b> and appropriate number of subjects for the first group (here
+ncontrols=10). If the design looks correct, then save it by
+pressing <b>Save</b> in the GLM setup window and give it the output basename
+of <code>design</code>. In this analysis, only the <code>design.mat</code>
+and <code>design.con</code> files will be used.</p>
+
+
+<p>Moreover, since we have more controls than patients, you will need to list the
+subjects used for the creation of an <i>unbiased</i> study-specific template by missing out 2 controls
+(for instance the last two: <code>con_3699.nii.gz</code>
+and <code>con_4098.nii.gz</code>), so that the number of controls used to
+build this study-specific template matches the number of patients in
+the <code>template_list</code> text file (we have provided this for you here). The contents of this file should therefore
+look like this:</p>
+
+<!--
+<pre class="bash">
+for g in con_1623.nii.gz con_2304.nii.gz con_2878.nii.gz \
+         con_3456.nii.gz con_3641.nii.gz con_3642.nii.gz \
+         con_3668.nii.gz con_3670.nii.gz pat_1433.nii.gz \
+         pat_1650.nii.gz pat_1767.nii.gz pat_2042.nii.gz \
+         pat_2280.nii.gz pat_2632.nii.gz pat_2662.nii.gz \
+         pat_2996.nii.gz; do \
+    echo $g >> template_list;
+done
+</pre>
+-->
+
+<pre>
+con_1623.nii.gz
+con_2304.nii.gz
+con_2878.nii.gz
+con_3456.nii.gz
+con_3641.nii.gz
+con_3642.nii.gz
+con_3668.nii.gz
+con_3670.nii.gz
+pat_1433.nii.gz
+pat_1650.nii.gz
+pat_1767.nii.gz
+pat_2042.nii.gz
+pat_2280.nii.gz
+pat_2632.nii.gz
+pat_2662.nii.gz
+pat_2996.nii.gz
+</pre>
+
+<p>
+Check the contents of this <code>template_list</code> file by doing: <code class="bash">cat template_list</code>
+</p>
+
+<h3>Preprocessing</h3>
+
+
+<p>We first ran the initial FSL-VBM script:</p>
+
+
+<pre class="dontrun">
+fslvbm_1_bet
+</pre>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="All subject T1 images
+(listed in template_list text file)"];
+  1b [label="Options"];
+  2 [label="fslvbm_1_bet"];
+  3 [label="Brain extracted subject T1 images"];
+
+  1 -> 2;
+  1b -> 2;
+  2 -> 3;
+}
+</div>
+
+
+<p>This moved all the original files into the <code>origdata</code> folder; to
+see what they all look like, run this command to view
+the <code>slicesdir</code> report in a web browser:</p>
+
+
+<pre class="bash">
+firefox origdata/slicesdir/index.html &
+</pre>
+
+
+<p>The <code>fslvbm_1_bet</code> command has also created some brain-extracted
+images. We actually ran <code>fslvbm_1_bet</code> both with the
+&lsquo;default&rsquo; <code>-b</code> option and then, because the original
+images have a lot of neck in them, which was often being left in by the
+default brain extractions, we ran using the <code>-N</code> option. Compare
+the different results from the two options by loading in the two web
+pages:</p>
+
+
+<pre class="bash">
+firefox struc/slicesdir-b/index.html &
+firefox struc/slicesdir-N/index.html &
+</pre>
+
+
+<p>It should be very obvious which option is working well and which one
+isn't!</p>
+
+
+<p>Next, all the brain images are segmented into the different tissue
+types, and then the study-specific GM template is created, by
+registering all GM segmentations to standard space, and averaging them
+together. The command used was:</p>
+
+
+<pre class="dontrun">
+fslvbm_2_template -n
+</pre>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="Template list"];
+  2 [label="All brain extracted subject T1 images"];
+  3 [label="fslvbm_2_template"];
+  4 [label="Study specific template"];
+  5 [label="Each subject's registration to study specific template"];
+
+  1 -> 3;
+  2 -> 3;
+  3 -> 4;
+  3 -> 5;
+}
+</div>
+
+
+
+<p>You can view all of the alignments to the MNI152 initial standard space by
+running the following, and turning on FSLeyes movie mode
+(<img src="movie_icon.png" alt="Gear button"
+style="vertical-align: middle; height: 16px;"/>):</p>
+
+
+<pre class="bash">
+fsleyes -std struc/template_4D_GM -cm blue-lightblue &amp;
+</pre>
+
+
+<p>and then view the alignment of the study-specific template to the
+MNI152 standard space with:</p>
+
+
+<pre class="bash">
+fsleyes -std struc/template_GM -cm blue-lightblue -dr 0.2 1 &amp;
+</pre>
+
+
+
+<p>Finally, the registrations to the new, study-specific, template
+were run for all subjects, and modulated by the warp field expansion
+(Jacobian), before being combined across subjects into the 4D image
+<code>stats/GM_mod_merg</code>. An initial GLM model-fit is run in order to
+allow you to view the raw tstat images at a range of potential smoothings.
+This was achieved by running (don't run this!):</p>
+
+
+<pre class="dontrun">
+fslvbm_3_proc
+</pre>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="All betted subject T1 files"];
+  2 [label="Each subject's registration to study specific template"];
+  3 [label="Study specific template"];
+  4 [label="Non-linear registration"];
+  5 [label="4D concatenated image of processed subject images
+(registered to template, Jacobian modulated and smoothed)"];
+
+  1 -> 4;
+  2 -> 4;
+  3 -> 4;
+  4 -> 5;
+  }
+</div>
+  
+<p>So now you can have a look at the initial raw tstat images created at the
+different smoothing levels, pick the one you &quot;like&quot; best. You can
+change the colour maps for each tstat in FSLeyes to more clearly see the
+differences.</p>
+
+
+<pre class="bash">
+cd stats
+fsleyes template_GM -dr .1 1 \
+  GM_mod_merg_s4_tstat1 -dr 2.3 6 \
+  GM_mod_merg_s3_tstat1 -dr 2.3 6 \
+  GM_mod_merg_s2_tstat1 -dr 2.3 6 &amp;
+</pre>
+
+
+<p>The different images that you can see in the <code>stats</code> directory
+are:</p>
+
+
+<dl class="horiz">
+
+<dt><code>GM_mask</code></dt><dd>the result of thresholding the mean (across
+  subjects) aligned GM image at 1% and turning into a binary mask. </dd>
+
+<dt><code>GM_merg</code></dt><dd>a 4D image containing all subjects' aligned
+  GM images.</dd>
+
+<dt><code>GM_mod_merg</code></dt><dd>the same as above, but after the GM
+  images have been &quot;modulated by the warp field Jacobian&quot; (adjusted
+  for warp expansion/contraction).</dd>
+
+<dt><code>GM_mod_merg_s2 / 3 / 4</code></dt><dd>the same as above, but after
+  Gaussian smoothing of 2, 3 and 4mm sigma.</dd>
+
+<dt><code>GM_mod_merg_s2_tstat1 / s3 / s4</code></dt><dd>the raw t-statistic
+  images from feeding the smoothed datasets into a GLM via randomise.</dd>
+
+<dt><code>design.mat / design.con</code></dt><dd>the design matrix and
+  contrast file specifying the cross-subject model that is fit to the data by
+  randomise.</dd>
+
+<dt><code>template_GM</code></dt><dd>the study-specific GM template that was
+  derived as part of the FSL-VBM analyses, and to which all subjects' GM
+  images were finally aligned to.</dd>
+</dl>
+
+
+<p>You are now ready to carry out the cross-subject statistics. We will
+use <code>randomise</code> for this, as the above steps are very unlikely to
+generate nice Gaussian distributions in the data.  Normally we would run at
+least 5000 permutations (to end up with accurate p-values), but this takes a
+few hours to run, so we will limit the number to 100 (to get a quick-and-dirty
+result). We will also use TFCE thresholding (Threshold-Free Cluster
+Enhancement - this is explained in the randomise lecture) which is similar to
+cluster-based thresholding but generally more robust and sensitive. </p>
+
+
+<p>For example, if you decide that the appropriate amount of smoothing is with
+a sigma of 3mm, then the following will run
+<code>randomise</code> with TFCE and a reduced number of 100 iterations:</p>
+
+
+<pre class="bash">
+randomise -i GM_mod_merg_s3 -o tmp -m GM_mask \
+  -d design.mat -t design.con -n 100 -T
+</pre>
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  5 [label="4D concatenated image of processed subject images
+(GM_mod_merg_s3.nii.gz)"];
+  6 [label="Design files
+(design.mat and design.con)"];
+  7 [label="Grey matter mask from study template
+(GM_mask.nii.gz)"];
+  8 [label="Multiple comparison correction option
+(-T ; for TFCE)"];
+  8b [label="Other options
+(-n 100 ; for 100 permutations)"];
+  9 [label="randomise"];
+  10 [label="Statistical outputs
+(basename of tmp)"];
+
+  5 -> 9;
+  6 -> 9;
+  7 -> 9;
+  8 -> 9;
+  8b -> 9;
+  9 -> 10;
+}
+</div>
+
+<p>Once randomise has finished use FSLeyes to look at the results (corrected for multiple
+comparisons) showing the local differences in grey matter volume between the two groups:</p>
+
+
+<pre class="bash">
+fsleyes template_GM -dr .1 1 \
+  tmp_tfce_corrp_tstat1 -cm red-yellow -dr 0.8 1 &amp;
+</pre>
+
+
+<p>Note that in this example we set the corrected p-threshold to 0.2 (i.e. 0.8 in
+FSLeyes), because of the reduced number of subjects in this example and hence
+low sensitivity to effect - you would not be able to get away with this in
+practice!</p>
+
+
+<div class="quiz_question">
+
+  <span class="question">What would happen if you didn't smooth your results
+  in a VBM analysis?</span><br/>
+
+  <form>
+    <input id="option1" class="option" type="radio" name="answer"/><label>You
+    would have better accuracy and anatomical localisation of your results to
+    isolate where the group differences are in the brain.</label>
+    <span id="option1" class="answer incorrect">Incorrect. Without smoothing,
+    you would have reduced power and less overlap between subjects in relevant
+    brain areas, which may mean that you miss out on important
+    results.</span><br/>
+
+    <input id="option2" class="option" type="radio" name="answer"/><label>You
+    would not get any results - you need to smooth for the statistics to be
+    valid.
+    </label>
+    <span id="option2" class="answer incorrect">Incorrect. While you do not
+    HAVE to smooth, without it you would have reduced power and less overlap
+    between subjects in relevant brain areas, which may mean that you miss out
+    on important results. </span><br/>
+
+    <input id="option3" class="option" type="radio" name="answer"/><label>You
+    would have reduced power and less overlap between subjects, so you may
+    miss important results.</label>
+    <span id="option3" class="answer correct">Correct!</span><br/>
+  </form>
+</div>
+
+<hr/>
+<h2><a name="bianca">BIANCA (Optional)</a></h2>
+<p>In this section we will use BIANCA to segment white matter lesions, specifically white matter hyperintensities
+of presumed vascular origin (WMH).</p>
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/bianca
+</pre>
+
+<p> We will prepare our data, train BIANCA on 9 subjects with manual
+    labels available (<code>sub-001</code> to <code>sub-009</code>), and test (i.e. segment lesions)
+    on data from the 10th subject (<code>sub-010</code>).
+    We are grateful to Dr. Giovanna Zamboni for providing the datasets used in this practical.
+</p>
+
+<h3>Before running BIANCA</h3>
+<h4>Look at your data</h4>
+Change directory into one subject folder (e.g. <code>sub-001</code>) to identify the following
+files we are going to use for each subject:
+
+<p><ul>
+  <li><code>FLAIR_brain.nii.gz</code> : main structural image, brain extracted</li>
+  <li><code>FLAIR_Lesion_mask.nii.gz</code> : binary manual lesion mask for the subjects used to train BIANCA</li>
+  <li><code>FLAIR_brain_to-MNI_xfm.mat</code> : transformation matrix from subject space (main structural image) 
+    to standard space (optional).
+    This is to be able to use spatial features (MNI coordinates)</li>
+  <li><code>T1_brain_to-FLAIR_brain.nii.gz</code> : additional input (optional). Other modalities that can
+  help the lesion segmentation (e.g. T1), all registered to the main image. Click <span class="clickme"
+  onclick="showIt('reg')">here</span> to see how it was obtained.</p>
+  
+  <div class="answer" id="reg" style="display: none;">
+    T1 was bias field corrected using FAST (e.g. within fsl_anat) and then registered to the FLAIR using FLIRT, 6 dofs:<br>
+<pre class="dontrun">
+fsl_anat --nosubcortseg -i T1
+flirt -dof 6 -in T1.anat/T1_biascorr_brain.nii.gz -ref FLAIR_brain.nii.gz \
+      -omat T1_brain_to-FLAIR_brain_xfm.mat -out T1_brain_to-FLAIR_brain.nii.gz
+</pre></div></li>
+
+</ul></p>
+
+<p>Look at your data on FSLeyes:</p>
+<pre class="bash">
+  fsleyes T1_brain_to-FLAIR_brain.nii.gz FLAIR_brain.nii.gz FLAIR_Lesion_mask.nii.gz -cm red -a 70 &
+</pre>
+
+<h4>Master file preparation</h4>
+<p>Now we need to put the information on where to find these files for each subject in a text file (<b>master file</b>),
+  which we will later give as input to BIANCA. <br>
+  The master file is a text file containing one row per subject and,
+  on each row, a list of all files for that subject (columns).<br>
+  Note: the order of the columns is not important, as long as it is the same for each subject/row.<br>
+</p>
+
+<div class="aside">
+Note that we listed <code>FLAIR_Lesion_mask.nii.gz</code> also for <code>sub-010</code>,
+which has no manual mask.
+This because we need to maintain the same structure of columns in the master file.<br>
+Since we will tell BIANCA to segment lesions for this subject,
+<code>sub-010/FLAIR_Lesion_mask.nii.gz</code> will just act as a "placeholder"
+and BIANCA will not look for the image.
+</div>
+
+<p>Have a quick look at the content of the file we have already prepared for you:<br>
+<pre class="bash">cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/bianca
+cat masterfile.txt
+</pre></p>
+
+<p>This is how it should look like:</p>
+<pre>
+sub-001/FLAIR_brain.nii.gz sub-001/T1_brain_to-FLAIR_brain.nii.gz sub-001/FLAIR_brain_to-MNI_xfm.mat sub-001/FLAIR_Lesion_mask.nii.gz
+sub-002/FLAIR_brain.nii.gz sub-002/T1_brain_to-FLAIR_brain.nii.gz sub-002/FLAIR_brain_to-MNI_xfm.mat sub-002/FLAIR_Lesion_mask.nii.gz
+sub-003/FLAIR_brain.nii.gz sub-003/T1_brain_to-FLAIR_brain.nii.gz sub-003/FLAIR_brain_to-MNI_xfm.mat sub-003/FLAIR_Lesion_mask.nii.gz
+sub-004/FLAIR_brain.nii.gz sub-004/T1_brain_to-FLAIR_brain.nii.gz sub-004/FLAIR_brain_to-MNI_xfm.mat sub-004/FLAIR_Lesion_mask.nii.gz
+sub-005/FLAIR_brain.nii.gz sub-005/T1_brain_to-FLAIR_brain.nii.gz sub-005/FLAIR_brain_to-MNI_xfm.mat sub-005/FLAIR_Lesion_mask.nii.gz
+sub-006/FLAIR_brain.nii.gz sub-006/T1_brain_to-FLAIR_brain.nii.gz sub-006/FLAIR_brain_to-MNI_xfm.mat sub-006/FLAIR_Lesion_mask.nii.gz
+sub-007/FLAIR_brain.nii.gz sub-007/T1_brain_to-FLAIR_brain.nii.gz sub-007/FLAIR_brain_to-MNI_xfm.mat sub-007/FLAIR_Lesion_mask.nii.gz
+sub-008/FLAIR_brain.nii.gz sub-008/T1_brain_to-FLAIR_brain.nii.gz sub-008/FLAIR_brain_to-MNI_xfm.mat sub-008/FLAIR_Lesion_mask.nii.gz
+sub-009/FLAIR_brain.nii.gz sub-009/T1_brain_to-FLAIR_brain.nii.gz sub-009/FLAIR_brain_to-MNI_xfm.mat sub-009/FLAIR_Lesion_mask.nii.gz
+sub-010/FLAIR_brain.nii.gz sub-010/T1_brain_to-FLAIR_brain.nii.gz sub-010/FLAIR_brain_to-MNI_xfm.mat sub-010/FLAIR_Lesion_mask.nii.gz
+</pre></p>
+
+The master file can be prepared using any text editor (or with excel and exporting it in txt format),
+  but it's quicker with some scripting (click <span class="clickme"
+  onclick="showIt('script')">here</span> to see how you can do it).</p>
+  
+<div class="answer" id="script" style="display: none;">
+<pre>
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/bianca
+for sub in `ls -d sub-???` ; do
+  echo  ${sub}/FLAIR_brain.nii.gz \
+        ${sub}/T1_brain_to-FLAIR_brain.nii.gz \
+        ${sub}/FLAIR_brain_to-MNI_xfm.mat \
+        ${sub}/FLAIR_Lesion_mask.nii.gz >> masterfile.txt
+done
+</pre>
+</div></br>
+
+<h3>Running BIANCA</h3>
+<p>Now we can give the master file as input to BIANCA, together with details on where to find the information inside it, 
+    and some additional information:
+</p>
+
+<div class="viz-graph">
+    digraph G {
+      rankdir=LR
+      node [shape=box];
+      1 [label="Master file: <code>--singlefile=masterfile.txt</code>"];
+      2 [label="Training: training subjects <code>--trainingnums</code> (rows n.)
+      + lesion masks <code>--labelfeaturenum</code> (column n.) or training file <code>--loadclassifierdata</code>"];
+      3 [label="Test: test subject <code>--querysubjectnum</code> (row n.) "];
+      4 [label="Brain extracted image: <code>--brainmaskfeaturenum</code> (column n.)"];
+      5 [label="BIANCA"];
+      6 [label="Lesion Probability map: <code>-o bianca_output.nii.gz</code>"];
+      7 [label="[optional] Training file: <code>--saveclassifierdata</code>"];
+      8 [label="[optional] List of intensity features: <code>--featuresubset</code> (columns n.)"];
+      9 [label="[optional] Transformation matrix to derive spatial features: <code>--matfeaturenum</code> (column n.)"];
+      10 [label="other options (see documentation)"];
+
+      1 -> 5;
+      2 -> 5;
+      3 -> 5;
+      4 -> 5;
+      5 -> 6;
+      5 -> 7;
+      8 -> 5;
+      9 -> 5;
+      10 -> 5
+    }
+    </div>
+
+<p>Run BIANCA with the following call (you can ignore warning messages):
+
+<pre class="bash">
+bianca --singlefile=masterfile.txt --trainingnums=1,2,3,4,5,6,7,8,9 --labelfeaturenum=4 \
+--querysubjectnum=10 --brainmaskfeaturenum=1 --featuresubset=1,2 --matfeaturenum=3 \
+--trainingpts=2000 --nonlespts=10000 --selectpts=noborder -o sub-010/bianca_output \
+--saveclassifierdata=mytraining -v
+</pre></br>
+
+Try to understand what the different options/flags mean and check your answer <span class="clickme"
+  onclick="showIt('masterexpl')">here</span>. For more details consult the help
+  (type <code>bianca</code> in the terminal) or the <a href="fsl/fslwiki/BIANCA/Userguide.html#BIANCA_options"
+target="_blank">BIANCA documentation page</a>.</p>
+
+<div class="answer" id="masterexpl" style="display: none;">
+    <img src="BIANCAcall_explained.png"><br>
+</div>
+
+
+<h4>Look at the output</h4>
+Let's have a look at the Lesion Probability Map:<br>
+<pre class="bash">
+fsleyes sub-010/FLAIR_brain.nii.gz sub-010/bianca_output.nii.gz -cm red-yellow -a 70 &
+</pre><br>
+Play with the display range to see which (minimum) threshold gives you a good lesion segmentation. Keep FSLeyes open.
+
+<p>Since we used the option <code>--saveclassifierdata</code> we also have two additional outputs:
+<ul>
+    <li>mytraining: file containing the features derived from the training points </li>
+    <li>mytraining_labels: file containing the labels (lesion/non-lesion) for the training points </li>
+</ul>
+
+<h3>After running BIANCA</h3>
+<b>Thresholding</b>. BIANCA output is a probability map. However, for most of the applications we want a binary lesion mask,
+so we need to apply a threshold and binarise the image. In this case we chose a threshold of 0.9:<br>
+
+<pre class="bash">
+fslmaths sub-010/bianca_output.nii.gz -thr 0.9 -bin sub-010/bianca_output_bin.nii.gz
+</pre><br>
+
+Add the thresholded lesion map in FSLeyes and look at the results. Keep FSLeyes open.</p>
+
+<p><b>Masking</b>. To further reduce false positive voxels, we can mask our output. For example, we can exclude areas we are either not interested in
+(e.g. the cortex), or where BIANCA currently struggles to correctly segment lesions (e.g. subcortical structures and cerebellum). </p>
+
+<p>In this case we prepared such a mask for you: <code>sub-010/prebaked/T1_bianca_mask_to-FLAIR_bin.nii.gz</code>.<br>
+Have a look at it on FSLeyes.<br>
+How do you apply the mask to the lesion map using <code>fslmaths</code>?
+Check the command line <span class="clickme"
+onclick="showIt('mask3')">here</span>.</p>
+
+<div class="answer" id="mask3" style="display: none;">
+<pre class="bash">
+fslmaths sub-010/bianca_output_bin.nii.gz -mul sub-010/prebaked/T1_bianca_mask_to-FLAIR_bin.nii.gz \
+          sub-010/bianca_output_bin_masked.nii.gz
+</pre><br>
+or, alternatively
+<pre class="bash">
+fslmaths sub-010/bianca_output_bin.nii.gz -mas sub-010/prebaked/T1_bianca_mask_to-FLAIR_bin.nii.gz \
+          sub-010/bianca_output_bin_masked.nii.gz
+  </pre><br>
+</div>
+
+<p>Add the masked lesion map on FSLeyes and look at the results.</p>
+
+<p>The mask we just used was created using BIANCA side-script <code>make_bianca_mask</code> (more details on the <a href="fsl/fslwiki/BIANCA/Userguide.html#Masking"
+    target="_blank">BIANCA documentation page</a>)<br>
+<i>Optional extension:</i> to see how to create and apply the mask, click <span class="clickme"
+onclick="showIt('mask')">here</span>.</p>
+
+<div class="answer" id="mask" style="display: none;">
+    The solution we adopted is to create a mask from T1 images, which excludes the cortical GM and the following structures:
+        putamen, globus pallidus, nucleus accumbens, thalamus, brainstem, cerebellum, hippocampus, amygdala.
+        We implemented this in the script <code>make_bianca_mask</code> (check usage on the help).</p>
+        
+    <p>What would be the <code>make_bianca_mask</code> command line to use for subject sub-010?<br>
+        What other FSL tools would you need to run to create the inputs for <code>make_bianca_mask</code>?<br>
+        After creating the mask, do you need to run any other FSL tool in order to use the masks? Which one(s)?<br>
+
+        Check your answer <span class="clickme"
+    onclick="showIt('mask2')">here</span>.</p>
+    <div class="answer" id="mask2" style="display: none;"><p>
+        <ul>
+            <li>Preprocessing: we need to run FAST to get <code>T1_fast_pve_0</code>, calculate the non-linear registration from T1 to MNI (FLIRT/FNIRT) and calculate inverse transformation (using <code>invwarp</code>)<br>
+            Alternatively, all the files we need are part of the output from <code>fsl_anat</code>.<br>
+            <pre class="dontrun"> fsl_anat --nosubcortseg -i sub-010/T1</pre><br>
+            Since it would take too long, we ran this for you, you can find the output in <code>sub-010/prebaked/T1.anat</code></li>
+            <li>Command line (using filenames as output from <code>fsl_anat</code>):<br>
+            <pre class="bash">make_bianca_mask sub-010/prebaked/T1.anat/T1_biascorr sub-010/prebaked/T1.anat/T1_fast_pve_0 \
+                  sub-010/prebaked/T1.anat/MNI_to_T1_nonlin_field.nii.gz</pre><br>
+            Note that we use the CSF output of FAST (<code>T1_fast_pve_0</code>), not the GM.
+            This is because GM segmentation using FAST can be compromised by the presence of WMH (which usually appear darker than the WM and can be misclassified as GM),
+            In this approach, the cortical GM is excluded from the brain mask by extracting the cortical CSF from single-subject CSF pve map,
+            dilating it to reach the cortical GM, and excluding these areas. The other structures are identified in MNI space,
+            non-linearly registered to the single-subject image, and removed from the brain mask.</li>
+            <li>Postprocessing: we need to register the mask from T1 to FLAIR space, then apply it to the lesion map.<br>
+            Since BIANCA requires that for each subject all the modalities are registered to the main image (FLAIR in this case),
+            we already have the transformation matrix from T1 to FLAIR (<code>T1_brain_to-FLAIR_brain_xfm.mat</code>), we only need to apply it to the mask
+            (after thresholding it to compensate for interpolation and binarising it):
+<pre class="bash">
+flirt -in sub-010/prebaked/T1.anat/T1_biascorr_bianca_mask.nii.gz -ref sub-010/FLAIR_brain \
+      -applyxfm -init sub-010/T1_brain_to-FLAIR_brain_xfm.mat -out sub-010/T1_bianca_mask_to-FLAIR<br>
+fslmaths sub-010/T1_bianca_mask_to-FLAIR -thr 0.25 -bin sub-010/T1_bianca_mask_to-FLAIR_bin
+fslmaths sub-010/bianca_output_bin.nii.gz -mul sub-010/T1_bianca_mask_to-FLAIR_bin.nii.gz sub-010/bianca_output_bin_masked.nii.gz</pre>
+        </li>
+        </ul>
+    <p>Add the masked lesion map on FSLeyes and look at the results.
+    </p></div>
+</p></div>
+
+
+
+<p><b>Volume calculation</b>. How would you calculate the volume (in mm<SUP>3</SUP>) of the final lesion map using <code>fslstats</code>? Check your answer <span class="clickme"
+  onclick="showIt('example2')">here</span>.</p>
+<div class="answer" id="example2" style="display: none;"><p>
+<p><pre class="bash">
+fslstats sub-010/bianca_output_bin_masked.nii.gz -V
+</pre></p>
+The second number is the volume in mm<SUP>3</SUP> (the first is the number of voxels)
+</div>
+
+<h3>Extension: segment lesions for a new subject with existing BIANCA training file</h3>
+<p>In the example above, we trained and tested BIANCA within a single call. Since we saved the training files (features and labels)
+  we can apply BIANCA to one (or more) new subject(s) without the need to re-train BIANCA.
+  How would you use BIANCA to segment lesions on a new subject (e.g. <code>sub-011</code>, not present in this dataset), using the training file we obtained above?
+  Consult the <a href="fsl/fslwiki/BIANCA/Userguide.html#BIANCA_options"
+  target="_blank">BIANCA documentation page</a> if you are unsure. Check your answer <span class="clickme"
+  onclick="showIt('example3')">here</span>.</p>
+  
+  
+  <div class="answer" id="example3" style="display: none;"><p>
+  First, we need to create a new masterfile with the information about the files for the new subject (e.g. <code>masterfile_new.txt</code>)<br>
+  Note: the order of the columns needs to be the same as in the masterfile used for creating the training.<br>
+  <pre class="bash">
+echo  sub-011/FLAIR_brain.nii.gz \
+      sub-011/T1_brain_to-FLAIR_brain.nii.gz \
+      sub-011/FLAIR_brain_to-MNI_xfm.mat \
+      sub-011/FLAIR_Lesion_mask.nii.gz >> masterfile_new.txt
+</pre></br>
+
+  Then we can run bianca using the new master file as input, with <code>-querysubjectnum=1</code>
+  (since there is only one row in the new masterfile), and using the option <code>--loadclassifierdata</code>
+  to select the training file created earlier:<br>
+  <p><pre class="bash">
+  bianca --singlefile=masterfile_new.txt --loadclassifierdata=mytraining --querysubjectnum=1 \
+  --brainmaskfeaturenum=1 --featuresubset=1,2 --matfeaturenum=3 \
+  -o sub-011/bianca_output -v </pre>
+
+  <p>Note: also the features (intensities, <code>--featuresubset</code>, and spatial <code>--matfeaturenum</code>) used to estimate the lesions need to be the same as those used to create the training file.</p> 
+  
+  <p>If you want to run BIANCA on more than one new subject, you can either create a single master file for each subject and change the input each time
+  with <code>--querysubjectnum</code> always 1, or you can add all the information about the new subjects
+  in a common masterfile and point <code>--querysubjectnum</code> at a different row each time.
+</p></div>
+
+<h3>Advanced extension: training and testing with leave-one-out</h3>
+
+<div class="aside">
+If you are testing different BIANCA options to select the best ones to use, leave-one-out is a suitable approach.
+However, if your aim is to report BIANCA performance, you should derive the metrics from an unseen portion of the data or a new dataset.
+</div>
+
+If we want to evaluate BIANCA performance against the manual masks in an unbiased way, we should use a leave-one-out approach:
+the subject we want to evaluate BIANCA performance on should not be included in the training.<br>
+In BIANCA, if <code>--querysubjectnum</code> is also included in the <code>--trainingnums</code> list,
+it is automatically excluded from the training set. In this way we can look at how well the lesion mask obtained
+with BIANCA compares with the manual mask.
+
+<p><pre class="bash">
+bianca --singlefile=masterfile.txt --trainingnums=1,2,3,4,5,6,7,8,9 --labelfeaturenum=4 --querysubjectnum=1 \
+--brainmaskfeaturenum=1 --featuresubset=1,2 --matfeaturenum=3 \
+--trainingpts=2000 --nonlespts=10000 --selectpts=noborder -o sub-001/bianca_output -v
+</pre></br>
+
+<p>Open the output on FSLeyes, together with the FLAIR image and the manual mask.</p>
+
+<b>Performance metrics</b>. If we want to quantify how well the automated segmentation with BIANCA matches the manual mask,
+we can calculate some performance metrics. BIANCA side-script <code>bianca_overlap_measures</code> can calculate some commonly
+used metrics. Check the usage and the metrics that will be calculated on the help (type <code>bianca_overlap_measures</code> in the terminal)
+or on the <a href="fsl/fslwiki/BIANCA/Userguide.html#Performance_evaluation"
+target="_blank">BIANCA documentation page</a>.
+
+
+<p><pre class="bash">
+bianca_overlap_measures sub-001/bianca_output 0.9 sub-001/FLAIR_Lesion_mask.nii.gz 1
+</pre></br></p>
+
+How can you assess the performance on BIANCA output after masking (you can find the mask in <code>prebaked_advanced/T1_bianca_mask_to-FLAIR_bin.nii.gz</code>? Check your answer <span class="clickme"
+onclick="showIt('maskperf')">here</span>.</p>
+
+
+<div class="answer" id="maskperf" style="display: none;"><p>
+<pre class="bash">
+fslmaths sub-001/bianca_output -mas sub-001/prebaked_advanced/T1_bianca_mask_to-FLAIR_bin.nii.gz sub-001/bianca_output_masked.nii.gz
+bianca_overlap_measures sub-001/bianca_output_masked 0.9 sub-001/FLAIR_Lesion_mask.nii.gz 1
+</pre></br>
+
+
+</p></div>
+
+<p>More details and guidelines for your analysis can be found in the
+    <a href="fsl/fslwiki/BIANCA.html"
+target="_blank">BIANCA documentation</a>.</p>
+
+
+
+<hr/>
+<h2><a name="siena">SIENA (Optional)</a></h2>
+
+
+<p>SIENA is a package for both single-time-point (&quot;cross-sectional&quot;)
+and two-time-point (&quot;longitudinal&quot;) analysis of brain change, in
+particular, the estimation of atrophy (volumetric loss of brain tissue).
+</p>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="T1 image from time point 1"];
+  2 [label="T1 image from time point 2"];
+  3 [label="bet"];
+  4 [label="Brain images and skull images
+(for both time points 1 and 2)"];
+  5 [label="siena_flirt"];
+  6 [label="Registrations of brains to half-way space
+(from time points 1 and 2)"];
+  7 [label="siena_diff"];
+  9 [label="Estimated change
+(between two aligned brains)"];
+
+  1 -> 3;
+  2 -> 3;
+  3 -> 4;
+  4 -> 5;
+  5 -> 6;
+  6 -> 7;
+  7 -> 9;
+}
+</div>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/siena
+ls
+</pre>
+
+
+<p>The example data is two time points, 24 months apart, from a subject with
+probable Alzheimer's disease. The command that was used to create the example
+analysis is (<b>don't run this - it takes too long!</b>): </p>
+
+
+<pre class="dontrun">
+siena sub3m0 sub3m24 -d -m -b -30
+</pre>
+
+
+<p>The <code>-d</code> flag tells the siena script not to clean up the many
+intermediate images it creates - you would not normally use this. The other
+options are explained later. </p>
+
+
+<p>SIENA has already been run for you. Change directory into the SIENA
+output directory: </p>
+
+
+<pre class="bash">
+cd sub3m0_to_sub3m24_siena
+ls
+</pre>
+
+
+<p>In the SIENA output directory the first timepoint image is named
+&quot;A&quot; and the second &quot;B&quot;, to keep filenames simple and
+short. To view the output report, open <code>report.html</code> in a web
+browser. The next few sections take you through the different parts of the
+webpage report, which correspond to the different stages of the SIENA
+analysis. </p>
+
+
+<h3>BET brain extraction results</h3>
+
+
+<p>First BET was run on the two input images, with options telling it to
+create the skull surface image and the binary mask image, as well as the
+default brain image. </p>
+
+
+<p> Other BET options can be included in the call to siena by adding
+<code>-B &quot;betopts&quot;</code> - for example </p>
+
+
+<pre class="dontrun">
+siena sub3m0 sub3m24 -d -m -b -30 -B &quot;-f 0.3&quot;
+</pre>
+
+
+<p>the command line tells <code>siena</code> to pass on the <code>-f 0.3</code>
+option to BET, which causes the estimated brain to be larger if the value used
+is less than 0.5, and smaller otherwise. </p>
+
+
+<p>You also might need to use the <code>-c</code> option to BET if you need to
+tell BET where to center the initial brain surface, such as when you have a
+huge amount of neck in the image. For example, if it looks like the centre of
+the brain is at 112,110,78 (in <em>voxels</em>, e.g. as viewed in FSLeyes),
+and you want to combine this option with the above <code>-f</code> option, you
+would add, to the siena command, </p>
+
+
+<pre class="dontrun">
+siena sub3m0 sub3m24 -d -m -b -30 -B &quot;-f 0.3 -c 112 110 78&quot;
+</pre>
+
+
+<p>You can see the two brain and skull extractions in the webpage report. If
+you want to see these in more detail, open the relevant images in FSLeyes, for
+example: </p>
+
+
+<pre class="bash">
+fsleyes A A_brain -cm red-yellow A_brain_skull -cm green &amp;
+</pre>
+
+
+<p>Be aware that the skull estimate is usually very noisy but that it is only
+used to determine the overall scaling and this process is not very sensitive
+to the noise as long as the majority of points lie on the skull. </p>
+
+
+
+<h3>FLIRT A-to-B registration results</h3>
+
+
+<p>Now the two time points are registered using the script
+<code>siena_flirt</code>. This runs the 3-step registration (brains, then
+skulls, then brains again). The transformation is &quot;halved&quot; so that
+each image can be transformed into the space halfway between the two. The
+webpage report shows the alignment of the two brains in this halfway
+space. You need to check that the two timepoints are fundamentally
+well-aligned, with only small (e.g. atrophy) changes between them. Look out
+for mistakes such as: the two images coming from different subjects, one image
+being left-right flipped relative to the other one, or one image having bad
+artefacts. </p>
+
+
+<p>If you want to look at the registration in more detail: </p>
+
+
+<pre class="bash">
+fsleyes A_halfwayto_B_brain B_halfwayto_A_brain &amp;
+</pre>
+
+
+
+<h3>FLIRT standard space registration results</h3>
+
+
+<p>Now, if standard-space-based masking has been requested (it was in
+this case, using the -m option in the command above), the two brain images are registered to the standard brain
+<code>$FSLDIR/data/standard/MNI152_T1_2mm_brain</code> using FLIRT. The
+transforms (and their inverses) are saved. The two brains are registered
+separately and their transforms compared to test for consistency. </p>
+
+
+<p>The webpage report shows the two images transformed into standard space,
+with the overlaying red lines derived from the edges of the standard space
+template, for comparison. </p>
+
+
+
+<h3>Field-of-view and standard space masking</h3>
+
+
+<p>If the <code>-m</code> option was set, a standard space brain mask is now
+transformed into the native image space and applied to the original brain
+masks produced by BET. This is in most areas a fairly liberal (dilated) brain
+mask, except around the eyes.</p>
+
+
+<p>If the <code>-t</code> or <code>-b</code> options are set then an upper or
+lower limit (in the Z direction) in standard space is defined, to supplement
+the masking. This is useful, for example, to restrict the field-of-view of the
+analysis if you have variable field-of-view at the top or bottom of the head
+in different subjects. </p>
+
+<p>Here you can see the bottom of the temporal lobes have not been included in
+the regions fed into the boundary edge movement analysis. You would use such a
+setting if these regions had not been acquired in one/some of the subjects in 
+your dataset.</p>
+
+
+<p>The webpage report shows the <code>-m</code> brain masking in blue,
+the <code>-t</code>/<code>-b</code> masking in red (you can see the effect of
+the <code>-b -30</code> option), and the intersection of the two maskings in
+green. It is this intersection that is what gets finally used. </p>
+
+
+
+<h3>FAST tissue segmentation</h3>
+
+
+<p>In order to find all brain/non-brain edge points, tissue-type segmentation
+is now run on both brain-extracted images. The GM and WM voxels are combined
+into a single mask, and the mask edges (including internal ventricle edges)
+are used to find edge motion (discussed below). The webpage report shows the
+two segmentations. </p>
+
+
+
+<h3>Change Estimation</h3>
+
+
+<p>The final step is to carry out change analysis on the registered masked
+brain images. At all points which are reported as boundaries between brain and
+non-brain, the distance that the brain surface has moved between the two time
+points is estimated. The mean perpendicular surface motion is computed and
+converted to PBVC (percentage brain volume change). </p>
+
+
+<!-- <LI>To make this conversion between mean perpendicular edge motion and -->
+<!-- PBVC, it is necessary to assume a certain relationship between real -->
+<!-- brain surface area, number of estimated edge points and real brain -->
+<!-- volume. This relationship will depend on slice thickness, image -->
+<!-- sequence type, etc. In order to correct for these factors, a -->
+<!-- self-calibration step is applied, by running <b>siena_diff</b> on one -->
+<!-- of the input images relative to a scaled version of itself, with the -->
+<!-- scaling pre-determined (and therefore known). Here the final PBVC is -->
+<!-- known in advance and the estimated value can be compared with this to -->
+<!-- get a correction factor for the current image. This is done for both -->
+<!-- input images and the average taken, to give a correction factor to be -->
+<!-- fed into the <b>siena_diff</b> output. -->
+
+
+<p>The webpage report shows the edge motion colour coded at the brain edge
+points, and then shows the final global PBVC value. To see the edge motion
+image in more detail: </p>
+
+
+<pre class="bash">
+fsleyes A_halfwayto_B_render -cm render1 &amp;
+</pre>
+
+
+
+<h3>&quot;LOOK AT YOUR DATA&quot; - SIENA Problem Cases</h3>
+
+
+<p>We now look at 4 examples of &quot;problem cases&quot; - these were real
+cases that occurred in one study; they illustrate some of the
+problems/mistakes that sometimes occur. </p>
+
+
+<h4>Example 1</h4>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/siena_problems/eg1/S2_032_ax_to_S2_164_ax_siena
+</pre>
+
+
+<p>Open <code>report.html</code> in a web browser.</p>
+
+
+<p>Look at the <b>FLIRT A-to-B registration results</b>. Can you tell what's
+wrong? If you're unsure, click <span class="clickme"
+onclick="showIt('ex1')">here</span>.</p>
+
+
+<div class="answer" id="ex1" style="display: none;"><p>The subject IDs have
+gotten mixed up - the two timepoint images are from different subjects!
+(Also, BET is including too much neck, but that's not the main
+problem....)</p>
+</div>
+
+
+<h4>Example 2</h4>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/siena_problems/eg2/S2_039_ax_to_S2_142r_ax_siena
+</pre>
+
+
+<p>Open <code>report.html</code> in a web browser.</p>
+
+
+<p>Look at the <b>FLIRT A-to-B registration results</b>. Can you tell what's
+wrong? If you're unsure, click <span class="clickme"
+onclick="showIt('ex2')">here</span>.</p>
+
+
+<div class="answer" id="ex2" style="display: none;"><p>One of the datasets has
+been left-right flipped (look at the axial slices in the registration
+animation), despite one of them having been marked with a right-side marker at
+some point...(and, yes, again BET is not working well on this data).
+</p></div>
+
+
+<h4>Example 3</h4>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/siena_problems/eg3/S2_080_ax_to_S2_121_ax_siena
+</pre>
+
+
+<p>Open <code>report.html</code> in a web browser.</p>
+
+
+<p>Look at the <b>FLIRT A-to-B registration results</b>. Can you tell what's
+wrong? If you're unsure, click <span class="clickme"
+onclick="showIt('ex3')">here</span>.</p>
+
+
+<div class="answer" id="ex3" style="display: none;"><p>Both original images
+have some movement artefact (ringing) and are quite noisy. It's probably not
+worth keeping data of this quality. Look in the coronal slices in the
+registration animation. Also, something else is odd....the images are clearly
+identical - they must have originally been the SAME timepoint by mistake. The
+slight boundary differences must be due to slightly different BET results
+caused by only one of the images having the right-side marker (seen in the top
+BET result image).</p></div>
+
+
+<h4>Example 4</h4>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/siena_problems/eg4/S2_002_ax_to_S2_162_ax_siena
+</pre>
+
+
+<p>Open <code>report.html</code> in a web browser.</p>
+
+
+<p>Look at the <b>FLIRT A-to-B registration results</b>. Can you tell what's
+wrong? If you're unsure, click <span class="clickme"
+onclick="showIt('ex4')">here</span>.</p>
+
+
+<div class="answer" id="ex4" style="display: none;"><p>The second dataset has
+bad motion artefact, and one of the datasets has been left-right
+flipped...</p></div>
+
+
+<hr/>
+<h2><a name="sienax">SIENAX (Optional)</a></h2>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/siena/sub3m0_sienax
+</pre>
+
+
+<p>In this section we look at how SIENAX works and look at the most useful
+outputs. SIENAX estimates total brain tissue volume, from a single image,
+normalised for skull size. </p>
+
+
+<p>Open <code>report.html</code> in a web browser. The example data is one
+time point from a subject with probable Alzheimer's disease. The command that
+was used to create the example analysis is (<b>don't run this!</b>): </p>
+
+
+<pre class="dontrun">
+sienax sub3m0 -d -b -30 -r
+</pre>
+
+
+<p>SIENAX starts by running BET and FLIRT in a manner very similar to SIENA,
+except that the second time point image is replaced by standard space brain
+and skull images. Next a standard space brain mask is
+<em>always</em> used to supplement the BET segmentation. </p>
+
+
+<p>As before, optional Z limits in standard space can be used to mask further.
+</p>
+
+
+<div class="viz-graph">
+digraph G {
+  rankdir=LR
+  node [shape=box];
+  1 [label="Subject T1"];
+  2 [label="Standard space images
+(brain extracted, mask and skull)"];
+  3 [label="bet"];
+  4 [label="Brain extracted image"];
+  5 [label="siena_flirt"];
+  6 [label="Structural image registered to standard brain
+(constrained by skull for scaling)"];
+  7 [label="Fast"];
+  8 [label="Tissue segmentations/volumes
+(of normalized subject T1)"];
+
+  1 -> 3;
+  2 -> 3;
+  3 -> 4;
+  1 -> 5;
+  2 -> 5;
+  4 -> 5;
+  5 -> 6;
+  6 -> 7;
+  7 -> 8;
+}
+</div>
+
+
+<p>Next, FAST is used, with partial volume estimation turned on, to provide an
+accurate estimate of grey and white matter volumes. In order to
+provide <em>normalised</em> volumes for GM/WM/total, the volumetric scaling
+factor derived from the registration to standard space is used to multiply the
+native volumes; the values are thus normalised for head size. </p>
+
+
+<hr/>
+<h2><a name="firstopt">FIRST Revisited (Optional)</a></h2>
+
+
+<h3>Uncorrected segmentation output</h3>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/first
+</pre>
+
+
+<p>This follows on from the initial part of the FIRST practical above and
+assumes that <code>run_first_all</code> has been successfully run.  Having
+considered the boundary corrected segmentation previously, we now turn to look
+at the uncorrected segmentation. </p>
+
+
+<p>The uncorrected segmentation shows two types of voxels: ones that the
+underlying surface mesh passes through (boundary voxels) and ones that are
+completely inside the surface mesh (interior voxels).  FIRST uses a mesh to
+model the structure when doing the segmentation, so converting this to a
+volume requires it to be split into boundary and interior regions like
+this. </p>
+
+
+<p>We will now look at the uncorrected volumetric segmentations: </p>
+
+
+<pre class="bash">
+fsleyes con0047_brain con0047_all_fast_origsegs &amp;
+</pre>
+
+
+<p>To view the segmentation better change the colourmap of the segmented image
+to <em>Red-Yellow</em> and make the <em>Max</em> display range value to 100
+for this image.  Note that you see the interior voxels and the boundary voxels
+in different colours.  This is because the boundary voxels are labeled with a
+value equal to 100 plus that of the interior voxels. That is, the interior and
+boundary voxels for the left hippocampus are labeled 17 (the CMA label
+designation for left hippocampus) and 117 respectively. </p>
+
+
+<p> The volume <code>con0047_all_fast_origsegs</code> is a 4D file containing
+each structure's segmentation in a separate 3D file.  If you change
+the <em>Volume</em> control on FSLeyes to go from 0 to 1 then you will see the
+left amygdala result.  These are separated in case these uncorrected
+segmentations overlap.  Play with the opacity settings (or turn the
+segmentation on and off) to see how good the segmentation is.</p>
+
+
+<p>These images require boundary correction which is done automatically
+by <code>run_first_all</code>.  However, there are alternative methods for
+doing the boundary correction which you can specify
+with <code>run_first_all</code> or as a post-processing on the uncorrected
+image with <code>first_boundary_corr</code>, although the settings used
+by <code>run_first_all</code> have been chosen as the optimal ones based on
+empirical testing.
+</p>
+
+
+<hr/>
+<h2><a name="mfast">Multi-Channel FAST (Optional)</a></h2>
+
+
+<pre class="bash">
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/seg_struc/fast
+</pre>
+
+
+<p>Multi-channel segmentation is useful for when the contrast or quality of a
+single image is insufficient to give a good segmentation.  Typically, this
+type of segmentation is not needed for healthy controls with good T1-weighted
+images, as the single channel results are good and are often even better than
+the multi channel results. However, when pathological tissues/lesions are
+present, or when the T1-weighted image quality is not good, multi-channel
+segmentation can take advantage of the extra contrast between tissue types in
+the different images and give better results. </p>
+
+
+<p>In <code>sub2_t1</code> and <code>sub2_t2</code> are T1-weighted and
+T2-weighted images of the same subject. Are they well aligned? You can get an
+easy non-interactive combined view of two images (which must have the same
+image dimensions) with <code>slices</code>:</p>
+
+
+<pre class="bash">
+slices sub2_t1 sub2_t2
+</pre>
+
+
+<p>They look reasonably aligned in sagittal and coronal view, but axial views
+clearly show misalignment between scans (if you cannot clearly see the axial slices, open the same two images in FSLeyes). Before running multi-channel FAST it
+is necessary to use FLIRT to register the data. Start by running <code class="bash">Bet</code> on each
+image to remove the non-brain structures, producing
+<code>subj2_t1_brain</code> and <code>sub2_t2_brain</code>.  Note that it is
+OK if one of the brain extraction results includes non-brain matter
+(e.g. eyeballs) but the other is accurate, since the brain mask used by FAST
+will be the intersection of the two masks. </p>
+
+
+<p>Start the FLIRT GUI:</p>
+
+
+<pre class="bash">
+Flirt &amp;
+</pre>
+
+
+<p>For this example use the following settings:</p>
+
+
+<ul>
+  <li><b>Reference image</b>: <code>sub2_t1_brain</code> (clear the existing
+    directory name in the file browser and press enter to get to the local
+    directory).</li>
+
+  <li><b>Input image</b>: <code>sub2_t2_brain</code></li>
+  <li><b>Output image</b>: <code>sub2_t2_to_t1</code></li>
+  <li><b>DOF</b>: 6
+</ul>
+
+All the other FLIRT defaults should be fine, but you could save some
+processing time by telling FLIRT that the images are <b>Already virtually
+aligned</b> (in Advanced &gt; Search &gt; Images). FLIRT will take a minute or
+two to run. </p>
+
+
+<p>Load <code>sub2_t1_brain</code> and <code>sub2_t2_to_t1</code> into FSLeyes
+to check the result of the registration. Change the colour map for the higher
+image in the list to <em>Red-Yellow</em> and increase its transparency so that
+you can see how good the overlap is. </p>
+
+
+<p>You can now forget <code>sub2_t2</code>.</p>
+
+
+<p>Run <code class="bash">Fast</code> (with the <b>Number of input
+channels</b> set to 2) on the multi-channel brain-extracted
+images <code>sub2_t1_brain</code> and
+<code>sub2_t2_to_t1_brain</code> (or whatever you called these BET
+outputs). Asking for the default number of classes (3 - assumed to be
+GM/WM/CSF) gives poor results because bits of other tissues outside of
+the brain are given a class - so you should run with 4 classes; then
+results should be good. This takes a few minutes; move on to the next
+part of the practical and view the results once <code>fast</code> has finished
+running. </p>
+
+
+
+<h3>Advanced: FAST - Other Options</h3>
+
+
+<p> If you have time to spare after finishing the other practical parts then
+you can come back and test the effect of various FAST options, obtained by
+typing: </p>
+
+
+<pre class="bash">
+fast -h
+</pre>
+
+
+<p> You could also work out how to colour-overlay segmentation results
+onto the input image using the <code>overlay</code> command. </p>
+
+
+<hr/>
+<p class="centred">The End.</p>
+</div>
+</body>
+</html>
