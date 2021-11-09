@@ -81,7 +81,7 @@ level will not be accurate.</p>
 
 
 <pre class="bash">
-cd /storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/registration
 ls
 </pre>
 
@@ -379,7 +379,7 @@ for the <b>Output directory</b> and make sure the directory is set to
 somewhere in your home directory. Then, in
 the <b>Selection</b> box at the bottom type &quot;<code>test_reg</code>&quot;
 and press <b>OK</b> (if you leave it empty, it would normally default to something like
-<code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/FUNC.feat</code>). </p>
+<code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/registration/FUNC.feat</code>). </p>
 
 
 <p>Now go to the <b>Pre-stats</b> tab and click the <b>B0 unwarping</b>
@@ -445,7 +445,7 @@ the registration:</p>
 
 
 <pre class="bash">
-cd /storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/example_reg.feat
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/example_reg.feat
 firefox report_reg.html &amp;
 </pre>
 
@@ -535,14 +535,14 @@ going to compare the registrations you just ran to these given examples.</p>
 registration step (functional to structural). Now add
 the <code>example_func2highres.nii.gz</code> image from the registration you
 ran with fieldmap correction
-(<code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/test_reg.feat/reg/example_func2highres.nii.gz</code>).
+(<code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/registration/test_reg.feat/reg/example_func2highres.nii.gz</code>).
 How does this registration compare to the original? It should be identical, or
 at least very, very similar.</p>
 
 
 
 <p>Now add the registration you ran <b>WITHOUT</b> fieldmaps
-(<code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/test_reg_no_fmap.feat/reg/example_func2highres.nii.gz</code>).
+(<code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/registration/test_reg_no_fmap.feat/reg/example_func2highres.nii.gz</code>).
 You may wish to rename this image within FSLeyes to something like
 <code>example_func2highres_no_fmap.nii.gz</code> to avoid confusion (as
 FSLeyes will initially give both images the same name). Use the FSLeyes tools
@@ -582,7 +582,7 @@ fieldmaps</p>
 <p>Now go to the FSLeyes window where you were looking at the second
 registration step (structural to standard). Add
 the <code>highres2standard.nii.gz</code> image from the registration you ran
-(<code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/test_reg.feat/reg/highres2standard.nii.gz</code>).
+(<code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/registration/test_reg.feat/reg/highres2standard.nii.gz</code>).
 This registration step was done linearly (using FLIRT) rather than nonlinearly
 (using FNIRT). Compare the linear and linear+non-linear versions of this
 step.</p>
@@ -593,8 +593,8 @@ linear and non-linear registration to the standard space:</p>
 
 
 <pre class="listing">
-/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/BRAIN_2/brain2_reg_linear2standard.nii.gz
-/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/BRAIN_2/brain2_reg_nonlinear2standard.nii.gz
+/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/BRAIN_2/brain2_reg_linear2standard.nii.gz
+/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/BRAIN_2/brain2_reg_nonlinear2standard.nii.gz
 </pre>
 
 
@@ -628,9 +628,9 @@ linear and non-linear registration to the standard space:</p>
 <p>Finally, de-select (or remove) the <code>highres2standard</code> images
 within the FSLeyes session. Add the combined registration images from the
 supplied example using both fieldmaps and non-linear registration
-(<code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/example_reg.feat/reg/example_func2standard.nii.gz</code>)
+(<code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/example_reg.feat/reg/example_func2standard.nii.gz</code>)
 and the registration you ran without fieldmaps or non-linear registration
-  (<code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/test_reg_no_fmaps.feat/reg/example_func2standard.nii.gz</code>).
+  (<code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/registration/test_reg_no_fmaps.feat/reg/example_func2standard.nii.gz</code>).
 <span class="note">You may need to rename these within FSLeyes to avoid
 confusion.</span> The registration without fieldmap correction or non-linear
 registration will be markedly worse than the original registration, as both
@@ -701,7 +701,7 @@ different files:</p>
 
 
 <pre class="bash">
-cd /storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/example_reg.feat/reg/
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/example_reg.feat/reg/
 ls
 </pre>
 
@@ -828,7 +828,7 @@ atlas (the <img src="eye_icon.png" class="icon"/> button in the overlay list)
 so you can see your new mask image better.</p>
 
 
-<p>We will now save this mask image out to a file in the directory <code>/storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/example_reg.feat/reg</code>.
+<p>We will now save this mask image out to a file in the directory <code>/storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/registration/EXAMPLE_REG/example_reg.feat/reg</code>.
   Click on the save button
 (<img src="floppy_disk_icon.png" class="icon"/>) alongside the mask image in
 the overlay list, and choose an appropriate name
@@ -1052,7 +1052,7 @@ with the tool <code>Featquery</code> but it is not as flexible and generally
 <p>Move into the <code>multiband_data</code> directory:</p>
 
 <pre class="bash">
-cd /storage/silver/pym0fm/<your DTS login&gt;/fsl_course_data/registration/multiband_data/
+cd /storage/silver/pym0fm/&lt;your DTS login&gt;/fsl_course_data/registration/multiband_data/
 ls
 </pre>
 
