@@ -9,7 +9,7 @@
 1. https://eroesch.github.io/2021-22-PYM0FM/feat1/index.html
 1. https://eroesch.github.io/2021-22-PYM0FM/feat2/index.html
 
-### Videos
+### Videos (from the [FSL 2021 course](https://www.youtube.com/playlist?list=PLvgasosJnUVl_bt8VbERUyCLU93OG31h_))
 * 1 Introduction to Brain Extraction and Registration (Reg E1, 9min) https://www.youtube.com/watch?v=3ExL6J4BIeo
 * 2 Registration: Image Spaces and Spatial Transformation (Reg E2, 28min) https://www.youtube.com/watch?v=2zcfYgdxhKM
 * 11 fMRI1: Introduction to Task fMRI Experiments and Analysis (fMRI E1, 13min) https://www.youtube.com/watch?v=y7wtbMl3y4E
