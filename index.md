@@ -14,6 +14,8 @@
 * 2 Registration: Image Spaces and Spatial Transformation (Reg E2, 28min) https://www.youtube.com/watch?v=2zcfYgdxhKM
 * 11 fMRI1: Introduction to Task fMRI Experiments and Analysis (fMRI E1, 13min) https://www.youtube.com/watch?v=y7wtbMl3y4E
 * 12 fMRI1: Preprocessing (fMRI E2, 43min) https://www.youtube.com/watch?v=fkti219rhRg
+
+* 22 fMRI3: Pipeline overview (fMRI3 E1, 15min) https://www.youtube.com/watch?v=aAbUDr1FqG4
 * 13 fMRI1: Introduction to Single Session Analysis and GLM Basics (fMRI E3, 45min) https://www.youtube.com/watch?v=xjYMRTibeBs
 * 14 fMRI1: Modelling and Statistics (fMRI1 E4, 15min) https://www.youtube.com/watch?v=wh8sWFWnaHw
 * 15 fMRI2: Group Analysis, Fixed/Mixed Effects, FLAME and OLS (fMRI2 E1, 25min) https://www.youtube.com/watch?v=cBe-gCTDUJ8
